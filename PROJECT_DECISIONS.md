@@ -514,3 +514,100 @@ sebelum implementasi dimulai.
    terulang untuk fitur Livewire manapun yang mem-bind array dengan key
    berisi titik — jangan pakai key string apa adanya di `wire:model`
    untuk kasus itu.
+
+## D-019 — SPJ Package & Evidence: cakupan ganda (per-termin/project-level), isi Document+Evidence, kelengkapan dihitung dinamis
+
+**Konteks:** Fase 8 (roadmap §9: "SPJ Package — checklist, evidence, ZIP
+export") jauh lebih minim spesifikasi dibanding fase-fase sebelumnya —
+blueprint hanya berisi satu baris per domain (`Evidence`: "bukti
+pendukung/lampiran, metadata, smart linking ke project/payment/
+personnel/requirement"; `Spj`: "pengelompokan dokumen per termin,
+checklist kelengkapan, manifest, export ZIP") plus daftar entitas kasar
+di §8 (`evidences, spj_packages, spj_items`). Dua fork arsitektur besar
+ditanyakan ke user lewat `AskUserQuestion` sebelum implementasi (RULE
+10 CLAUDE.md) — sisanya (lifecycle, format manifest, isi ZIP,
+permission) diputuskan mengikuti pola yang sudah establish, didokumentasikan
+di sini.
+
+**Keputusan:**
+
+1. **Cakupan SpjPackage GANDA** (dikonfirmasi user, bukan hanya
+   per-termin): `spj_packages.payment_id` NULLABLE — diisi = paket per
+   termin, null = paket level project ("SPJ Akhir"). Tidak ada tabel/
+   enum terpisah untuk membedakan "jenis" paket — cukup nullability satu
+   kolom (`SpjPackage::isProjectLevel()` helper), konsisten dengan pola
+   nullable-FK-sebagai-context opsional yang sudah dipakai `Document.payment_id`
+   (D-018) dan sekarang `Evidence.payment_id`.
+2. **Isi package: Document DAN Evidence** (dikonfirmasi user, scope
+   lebih besar dari opsi minimal). `Evidence` dibangun penuh sebagai
+   domain baru — model+migration+FileStorageService (reuse method
+   `store()` yang sudah ada, BUKAN `storeFromPath()` yang khusus file
+   hasil-generate Phase 7, karena upload Evidence lewat form HTTP biasa
+   seperti PersonnelDocument) + Livewire manager (pola identik
+   `Personnel\Documents`) + download controller (pola identik
+   `DownloadPersonnelDocumentController`). "Smart linking" diimplementasi
+   sebagai FK NULLABLE EKSPLISIT (`payment_id`, `personnel_id`,
+   `document_requirement_id`) — BUKAN polymorphic (`morphTo`) — karena
+   aplikasi ini TIDAK PERNAH memakai polymorphic relation di manapun;
+   menambahkannya di sini hanya untuk 3 target link yang sudah diketahui
+   sejak awal akan menambah kompleksitas tanpa manfaat nyata (RULE 67).
+3. **`SpjItem` — manifest pivot, menunjuk PERSIS SATU dari `document_id`/
+   `evidence_id`** (nullable keduanya, divalidasi di service — bukan
+   DB constraint, pola sama D-016 poin 5: partial unique/check
+   constraint tidak portable). Duplikasi (dokumen/evidence yang sama
+   ditambahkan dua kali ke package yang sama) dicegah di
+   `SpjPackageService::addDocument()/addEvidence()` via query exists()
+   check, melempar `DomainActionException`.
+4. **Lifecycle SpjPackage: Draft -> Finalized, TIDAK ADA jalan balik**
+   (`SpjPackageStatus`, pola sama `TemplateStatus`/`PaymentStatus`).
+   Finalisasi mengunci manifest (`assertDraft()` melempar exception
+   untuk add/remove item pada paket Finalized) — mencegah paket yang
+   sudah "diserahkan"/diekspor disusupi item baru diam-diam. TIDAK ADA
+   versioning paket seperti DocumentTemplate/Document (D-016/D-018) —
+   revisi = buat paket BARU, sesuai kesederhanaan yang cukup untuk unit
+   kerja ini (satu paket biasanya dibuat sekali per termin/akhir
+   project, bukan berulang seperti dokumen individual).
+5. **"Kelengkapan checklist" dihitung DINAMIS, bukan status tersimpan**
+   — `SpjPackageService::coverage()` membandingkan isi package (via
+   `SpjItem::documentRequirementId()`, dibaca dari `document`/`evidence`
+   terkait) terhadap `ChecklistService::applicableRequirements($project)`
+   yang SUDAH ADA sejak Phase 5. Ini SATU logika seragam untuk paket
+   per-termin MAUPUN paket level-project — paket per-termin akan wajar
+   menunjukkan cakupan sebagian (mis. hanya requirement yang relevan
+   untuk termin itu) karena dibandingkan terhadap SELURUH checklist
+   project, bukan sub-set khusus per-termin. Tidak dibangun konsep
+   "requirement per termin" terpisah — di luar scope yang diminta
+   (`Payment.required_items` sejak Phase 4 sudah menampung kebutuhan itu
+   sebagai teks bebas untuk dibaca manual oleh user, bukan struktur baru).
+6. **Export ZIP**: `ZipArchive` bawaan PHP (pola sama D-016), SINKRON
+   (bukan queued job — jumlah item per paket kecil, RULE 67). Isi ZIP:
+   PDF setiap Document (fallback DOCX kalau entah bagaimana tidak ada
+   PDF — seharusnya tidak pernah terjadi karena generate wajib PDF sejak
+   D-018) + file asli setiap Evidence, diberi nama `"NN - Nama.ext"`
+   berurutan sesuai `sort_order`, plus `manifest.txt` (bukan PDF/DOCX —
+   RULE 67, tidak perlu render dokumen untuk sekadar daftar isi) berisi
+   metadata paket + daftar item dan requirement yang dipenuhinya.
+7. **Tidak ada permission baru** — Evidence dan SpjPackage keduanya
+   digerbangi `ProjectPolicy::update`/`view` yang sama dengan Payment/
+   CostItem/Checklist/Document (D-014/D-018), karena keduanya
+   sub-resource project, bukan master data independen.
+8. **Bug nyata ditemukan lewat Larastan SEBELUM masuk test** (mirip pola
+   D-012, bukan D-017/D-018 poin 7 yang ditemukan manual): `Evidence`
+   adalah kata tak-berhitung dalam Bahasa Inggris — Eloquent secara
+   otomatis meng-resolve nama tabelnya jadi `evidence` (singular),
+   BUKAN `evidences` (nama tabel migrasi). Tanpa `protected $table =
+   'evidences';` eksplisit, SETIAP query/insert lewat model ini akan
+   gagal total di runtime (tabel `evidence` tidak ada) — nyaris identik
+   dengan bug Personnel (D-012). Ditemukan dari phpstan level 8 yang
+   melaporkan SEMUA kolom Evidence sebagai "undefined property" (karena
+   Larastan mengintrospeksi tabel yang salah), bukan dari test yang
+   gagal — **pelajaran berulang: SETIAP model baru dengan nama benda
+   tak-berhitung/ambigu (evidence, information, equipment, series, dst.)
+   harus dicek `(new Model())->getTable()` di tinker SEBELUM menulis
+   query pertama**, jangan asumsikan pluralisasi Eloquent selalu benar.
+
+**Alasan ringkas:** Menghormati keputusan user (cakupan ganda + Document+Evidence
+sekaligus) sambil menahan diri dari over-engineering di setiap area yang
+TIDAK diminta eksplisit (tanpa polymorphic, tanpa versioning paket, tanpa
+queue, tanpa requirement-per-termin terpisah) — konsisten dengan RULE 67
+dan pola keputusan yang sudah terbukti di fase-fase sebelumnya.

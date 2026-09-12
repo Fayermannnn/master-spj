@@ -136,4 +136,20 @@ class Project extends Model
     {
         return $this->hasMany(Document::class);
     }
+
+    /**
+     * @return HasMany<Evidence, $this>
+     */
+    public function evidences(): HasMany
+    {
+        return $this->hasMany(Evidence::class);
+    }
+
+    /**
+     * @return HasMany<SpjPackage, $this>
+     */
+    public function spjPackages(): HasMany
+    {
+        return $this->hasMany(SpjPackage::class);
+    }
 }

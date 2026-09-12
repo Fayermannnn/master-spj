@@ -5,166 +5,164 @@ lanjut tanpa kehilangan konteks.
 
 ## Current Phase
 
-**Phase 7 — Document Generator: SELESAI.** Siap lanjut ke fase berikutnya
-sesuai roadmap (`PROJECT_BLUEPRINT.md` §9/§12) — kemungkinan Evidence/SPJ
-Package atau Notification, cek tabel fase untuk urutan pastinya.
+**Phase 8 — SPJ Package: SELESAI.** Siap lanjut ke **Phase 9 — Dashboard**
+(dashboard, laporan, timeline) sesuai roadmap (`PROJECT_BLUEPRINT.md` §9).
 
 ## Completed Features
 
-### Phase 1-6 (ringkas — detail di git log / PROJECT_DECISIONS.md)
+### Phase 1-7 (ringkas — detail di git log / PROJECT_DECISIONS.md)
 Auth, RBAC, Organization, User Management, ProjectType, Client+Contact,
 Project (status siklus), Contract, PersonnelCategory, Personnel (+
 dokumen), PersonnelAssignment, TaxType, CostCategory, CostItem, Payment,
 DocumentRequirement + RequirementRule + RequirementRuleEvaluator +
-ProjectChecklistItem (Document Requirement Engine), TemplateVariable +
-DocumentTemplate + DocxPlaceholderScanner (Document Template versioning
-& deteksi placeholder).
+ProjectChecklistItem, TemplateVariable + DocumentTemplate +
+DocxPlaceholderScanner, VariableResolver + DocumentGeneratorService
+(generate DOCX+PDF sungguhan lewat phpword + LibreOffice, tabel
+`documents` dengan data snapshot).
 
-### Phase 7 (baru) — Document Generator
+### Phase 8 (baru) — SPJ Package
 
-- **VariableResolver** (`app/Domain/DocumentGenerator/Services`) —
-  kosakata TERTUTUP (pola sama dengan `RequirementRuleEvaluator`, D-015)
-  yang menerjemahkan `template_variables.key` jadi nilai nyata dari
-  Project/Contract/Client/Contact(PPK)/Organization(Provider)/Payment.
-  `resolveScalar()` untuk nilai tunggal (format Rupiah/tanggal Indonesia
-  otomatis), `resolveTableRows()` untuk grup tabel berulang (baru
-  `personnel` yang didukung — nama/posisi/NPWP per
-  `PersonnelAssignment`). Variable baru yang ditambah admin lewat UI
-  TemplateVariable tetap BISA diisi manual di form generate walau belum
-  ada auto-resolve untuknya — lihat D-018 poin 5.
-- **DocumentGeneratorService** — orkestrasi penuh: validasi template
-  Active, isi `phpoffice/phpword` `TemplateProcessor` (delimiter
-  `{{ }}`, table variable lewat `cloneRowAndSetValues()`/`deleteRow()`),
-  simpan DOCX, WAJIB konversi PDF (`PdfConverterInterface` ->
-  `LibreOfficePdfConverter`, LibreOffice headless), baru setelah SEMUA
-  berhasil simpan baris `Document` + snapshot data (§61-62) + update
-  `ProjectChecklistItem` jadi Fulfilled. Atomik — kalau PDF gagal
-  konversi, tidak ada file/baris DB yang tertinggal.
-- **`documents` table** — terpisah dari `project_checklist_items`
-  (rekomendasi Phase 6 dikonfirmasi user), versi bertambah per
-  (project, requirement), `payment_id` nullable untuk konteks termin
-  (variable `payment.*`), `document_template_id` (`restrictOnDelete` —
-  histori generate tidak boleh kehilangan jejak versi template yang
-  dipakai).
-- **Tab "Dokumen"** pada halaman Project (`GeneratedDocuments\Manager`,
-  nested seperti tab Termin/Checklist) — form generate per
-  DocumentRequirement (hanya muncul kalau ada versi template Active),
-  prefill otomatis semua placeholder yang bisa di-auto-resolve, field
-  Termin/Pembayaran muncul otomatis kalau template mengandung variable
-  `payment.*` (live re-resolve saat termin dipilih), riwayat versi
-  dokumen dengan link unduh DOCX/PDF terpisah + hapus.
-- **Download controller** — `DownloadGeneratedDocumentController`
-  (`/generated-documents/{document}/download/{type}`), pola sama
-  dengan `DownloadDocumentTemplateController`/`DownloadPersonnelDocumentController`
-  (`Gate::authorize('view', $document->project)`, bukan permission
-  baru).
-- **Tidak ada permission baru** — generate/hapus dokumen digerbangi
-  `ProjectPolicy::update`, sama seperti Payment/CostItem/Checklist
-  (D-014), karena `Document` adalah sub-resource project.
-- **Bug Livewire ditemukan & diperbaiki SEBELUM masuk test** (lewat
-  tinjauan manual, D-018 poin 7): `wire:model` mengartikan setiap titik
-  pada path sebagai array bersarang — placeholder seperti
-  `project.name` mengandung titik LITERAL sebagai bagian nama key
-  array, jadi tidak bisa dipakai langsung sebagai path Livewire.
-  Diperbaiki dengan menyimpan `$variableInputs` sebagai list terindeks
-  angka, bukan dikunci nama placeholder — lihat `PROJECT_DECISIONS.md`
-  D-018 untuk detail lengkap, **pola ini bisa terulang di fitur lain
-  yang mem-bind array dengan key mengandung titik.**
-- Diverifikasi END-TO-END SUNGGUHAN: dev server dijalankan, login
-  sebagai `admin@ciptarencana.example`, generate dokumen "Kontrak"
-  sungguhan untuk project referensi (`ReferenceProjectSeeder`) — hasil
-  DOCX & PDF diverifikasi berisi SEMUA nilai yang benar (nilai kontrak
-  Rp 1.980.610.920 sesuai KAK, PPK, provider, dua baris tabel personel
-  dengan nama/posisi benar, konteks termin ter-resolve otomatis saat
-  dipilih), file diunduh lewat browser dan dicek header PDF/DOCX asli.
-  Checklist item "Kontrak" otomatis berubah dari "Belum Lengkap" ke
-  "Lengkap" tanpa aksi manual.
-- 7 test baru (86 total) — `tests/Feature/GeneratedDocuments/DocumentGenerationTest.php`:
-  isi placeholder skalar+tabel dan tandai checklist Fulfilled, versi
-  bertambah per generate berikutnya, tolak generate dari template
-  non-Active, hapus file DOCX+PDF+baris bersama, alur Livewire generate
-  penuh, tolak akses lintas organisasi, resolve konteks Payment. Test
-  memakai `FakePdfConverter` (bind interface) — TIDAK menjalankan
-  LibreOffice sungguhan di test suite (proses eksternal, lambat/rapuh
-  untuk dijalankan tiap test run) — hanya diverifikasi manual sungguhan
-  di browser (lihat poin di atas). Semua hijau (`composer ci`).
+- **Evidence** (`app/Domain/Evidence`) — domain BARU untuk bukti
+  pendukung yang diunggah MANUAL (foto, nota, scan tanda tangan), beda
+  dari `Document` (Phase 7) yang selalu hasil GENERATE. "Smart linking"
+  opsional ke Payment/Personnel/DocumentRequirement lewat FK NULLABLE
+  eksplisit (bukan polymorphic — aplikasi ini tidak pernah pakai
+  polymorphic relation). Upload/hapus lewat `EvidenceService` (pola
+  identik `PersonnelDocumentService`), UI di tab "Bukti Pendukung" pada
+  halaman Project (`app/Livewire/Evidence/Manager.php`), download lewat
+  `DownloadEvidenceController` (`Gate::authorize('view', $evidence->project)`).
+- **SpjPackage** (`app/Domain/Spj`) — satu baris = satu paket SPJ untuk
+  Project. `payment_id` NULLABLE menentukan cakupan: diisi = per
+  termin, null = level project ("SPJ Akhir") — KEDUANYA didukung
+  (dikonfirmasi user lewat AskUserQuestion di awal fase). Lifecycle
+  `SpjPackageStatus`: Draft -> Finalized, TIDAK ADA jalan balik —
+  Finalized mengunci manifest, revisi = buat paket baru (tidak ada
+  versioning seperti DocumentTemplate/Document).
+- **SpjItem** — manifest pivot, menunjuk PERSIS SATU dari `document_id`/
+  `evidence_id` (divalidasi di service, bukan DB constraint). Duplikasi
+  dicegah otomatis.
+- **`SpjPackageService::coverage()`** — kelengkapan checklist per paket
+  dihitung DINAMIS (bukan status tersimpan) dengan membandingkan isi
+  manifest terhadap `ChecklistService::applicableRequirements()` yang
+  sudah ada sejak Phase 5. Satu logika seragam untuk paket per-termin
+  maupun level-project.
+- **`SpjExportService`** — menyusun ZIP (`ZipArchive` bawaan PHP, tanpa
+  dependency baru) berisi PDF tiap Document (fallback DOCX kalau tanpa
+  PDF) + file asli tiap Evidence + `manifest.txt` (metadata paket +
+  daftar isi + requirement yang dipenuhi tiap item). Sinkron (bukan
+  queued job — jumlah item per paket kecil).
+- **Tab "Bukti Pendukung" & "Paket SPJ"** pada halaman Project — list
+  paket, buat paket baru (nama + cakupan opsional), kelola manifest
+  (tambah Document/Evidence yang belum termasuk, keluarkan item),
+  progress bar kelengkapan, tombol Finalisasi & Ekspor ZIP.
+- **Tidak ada permission baru** — Evidence & SpjPackage digerbangi
+  `ProjectPolicy::update`/`view`, sama seperti Payment/CostItem/
+  Checklist/Document (D-014/D-018).
+- **Bug nyata ditemukan lewat phpstan level 8 SEBELUM ditulis ke test**
+  (bukan test gagal): `Evidence` kata tak-berhitung dalam Bahasa
+  Inggris — Eloquent meng-resolve nama tabelnya jadi `evidence`
+  (singular), BUKAN `evidences` (nama tabel migrasi) — TANPA fix ini,
+  setiap query/insert lewat model ini gagal total di runtime. Nyaris
+  identik dengan bug Personnel (D-012). Diperbaiki dengan
+  `protected $table = 'evidences';` eksplisit. **Pelajaran untuk model
+  baru ke depan: cek `(new Model())->getTable()` di tinker untuk setiap
+  nama model yang berpotensi kata tak-berhitung** (evidence,
+  information, equipment, series, dst.) SEBELUM menulis query pertama.
+- Diverifikasi END-TO-END SUNGGUHAN lewat browser: generate dokumen
+  Kontrak (Phase 7) + upload Evidence sungguhan + buat SpjPackage "SPJ
+  Akhir" (level project) + tambah Document dan Evidence ke manifest +
+  cek coverage checklist (1 dari 12 setelah 1 item, benar) + ekspor ZIP
+  sungguhan dan diperiksa isinya (`01 - Kontrak.pdf`,
+  `02 - Foto Serah Terima Laporan.jpg`, `manifest.txt` dengan konten
+  yang benar).
+- 12 test baru (98 total) — `tests/Feature/Evidence/EvidenceManagementTest.php`
+  (upload dengan smart-link, hapus+file terhapus, tolak lintas
+  organisasi, tolak download lintas organisasi) dan
+  `tests/Feature/SpjPackages/SpjPackageManagementTest.php` (buat paket
+  per-termin & level-project, tambah Document+Evidence & hitung
+  coverage, tolak duplikasi item, blokir edit manifest setelah
+  Finalized, tolak finalisasi paket kosong, hapus item, ekspor ZIP
+  berisi PDF+manifest, tolak akses lintas organisasi). Semua hijau
+  (`composer ci`).
 
 ## Known Issues / Deferred (sengaja, bukan bug)
 
-- **Grup tabel baru selain `personnel`** belum didukung —
-  `VariableResolver::tableGroups()`/`resolveTableRows()` hanya punya
-  satu cabang (`personnel`). Menambah grup tabel baru (mis. daftar
-  deliverable, daftar biaya) = menambah satu entri di `tableGroups()` +
-  satu cabang `match` di `resolveTableRows()`, konsisten dengan pola
-  D-015/D-018.
-- **Auto-resolve variable baru butuh kode**, hanya kenyamanan (bukan
-  blocker fungsional) — lihat D-018 poin 5. Variable yang ditambah
-  admin lewat UI TemplateVariable tanpa cabang `match` di
-  `VariableResolver::resolveScalar()` tetap bisa diisi MANUAL di form
-  generate (kotak input selalu muncul untuk setiap placeholder
-  terdeteksi), hanya tidak ter-prefill otomatis.
-- **Regenerasi tidak menandai versi lama sebagai "usang"** — versi
-  DOCUMENT lama (bukan template) tetap bisa diunduh setelah versi baru
-  dibuat (riwayat lengkap, sesuai prinsip "banyak dokumen per
-  requirement" dari rekomendasi Phase 6), tidak ada status
-  aktif/nonaktif seperti pada DocumentTemplate. Kalau di masa depan
-  perlu "versi resmi yang berlaku" per requirement (mirip
-  TemplateStatus::Active), itu perluasan tersendiri.
-- **Belum ada halaman preview isi dokumen sebelum download** — user
-  harus unduh DOCX/PDF dulu untuk melihat hasilnya. Preview inline
-  (mis. render PDF di browser) bisa jadi peningkatan UX di fase
-  mendatang, bukan kebutuhan MVP.
+- **Tidak ada "requirement per termin" terpisah** — kelengkapan paket
+  per-termin dibandingkan terhadap SELURUH checklist project (lewat
+  `ChecklistService::applicableRequirements()`), bukan sub-set khusus
+  untuk termin itu. `Payment.required_items` (teks bebas sejak Phase 4)
+  tetap jadi cara user mencatat kebutuhan spesifik per termin secara
+  manual — kalau di masa depan perlu struktur formal ("requirement X
+  wajib ada di termin Y"), itu perluasan tersendiri, BUKAN yang diminta
+  di fase ini.
+- **Tidak ada versioning SpjPackage** — beda dari DocumentTemplate/
+  Document yang punya `version` bertambah otomatis. Revisi paket =
+  buat paket baru manual. Kalau kebutuhan revisi-berkelanjutan muncul
+  nyata di masa depan, pertimbangkan pola yang sama.
+- **`wire:confirm` (dialog konfirmasi browser) tidak bisa diuji lewat
+  tooling browser-automation di sesi ini** — percobaan klik tombol
+  "Finalisasi" (yang pakai `wire:confirm`) lewat automated browser
+  malah menavigasi ke halaman lain tanpa efek (state paket tetap
+  Draft, tidak ada error). Logika finalize() SUDAH diverifikasi benar
+  lewat Pest (`it('blocks manifest changes once a package is
+  finalized')` dan `it('rejects finalizing an empty package')`), hanya
+  interaksi UI dialog konfirmasi yang belum dicoba manual — sama
+  seperti keterbatasan file-picker native OS di Phase 6. Kalau ragu,
+  minta user mencoba klik Finalisasi sekali secara manual.
+- **Reference project (RSPNDD) tidak diberi SpjPackage/Evidence
+  permanen di seeder** — data demo yang dipakai untuk verifikasi
+  browser dibuat lewat script sementara lalu database di-reset
+  (`migrate:fresh --seed`) supaya tetap bersih untuk sesi berikutnya.
+  Kalau perlu data SPJ contoh yang persisten untuk demo, tambahkan ke
+  `ReferenceProjectSeeder` secara sengaja di fase mendatang.
 
-## Database Changes (Phase 7)
+## Database Changes (Phase 8)
 
-- `documents`: ulid PK, project_id (FK cascade), document_requirement_id
-  (FK cascade), document_template_id (FK restrictOnDelete), payment_id
-  (FK nullable, nullOnDelete), version (unsigned int), name,
-  data_snapshot (json), disk/path/original_filename/mime_type/size
-  (DOCX), pdf_disk/pdf_path/pdf_original_filename/pdf_size (nullable —
-  secara desain SELALU diisi bersama karena generate atomik, kolom
-  nullable murni untuk keluwesan skema), generated_by (FK users
-  nullable), generated_at, notes, soft delete. Unique
-  `[project_id, document_requirement_id, version]`.
+- `evidences`: ulid PK, project_id (FK cascade), payment_id/personnel_id/
+  document_requirement_id (semua nullable FK, nullOnDelete), name,
+  category nullable, description nullable, disk/path/original_filename/
+  mime_type/size, uploaded_by nullable, notes nullable, soft delete.
+  **PENTING**: model punya `protected $table = 'evidences';` eksplisit
+  — jangan dihapus (lihat D-019 poin 8).
+- `spj_packages`: ulid PK, project_id (FK cascade), payment_id (nullable
+  FK, nullOnDelete — null = level project), name, status (draft/
+  finalized), notes nullable, created_by nullable, finalized_at
+  nullable, soft delete.
+- `spj_items`: ulid PK, spj_package_id (FK cascade), document_id
+  (nullable FK, cascadeOnDelete), evidence_id (nullable FK,
+  cascadeOnDelete), sort_order, TANPA soft delete (pivot murni, hapus
+  = hard delete).
 
 ## Environment
 
-- **LibreOffice WAJIB terpasang** untuk generate dokumen (konversi
-  PDF) — `brew install --cask libreoffice` di macOS. Binary
-  dikonfigurasi lewat `LIBREOFFICE_BINARY` di `.env` (default
-  `soffice`, resolve via PATH — Homebrew cask menaruh command wrapper
-  di `/opt/homebrew/bin/soffice` secara otomatis setelah instalasi,
-  tidak perlu path absolut manual).
-- Composer dependency baru: `phpoffice/phpword` (^1.4). Tidak ada
-  dependency baru untuk PDF — `Illuminate\Support\Facades\Process`
-  bawaan Laravel framework.
+Tidak berubah dari Phase 7 — LibreOffice tetap wajib terpasang untuk
+generate Document (dipakai lewat `SpjExportService` secara tidak
+langsung, karena ZIP membundel PDF hasil generate Phase 7). Tidak ada
+dependency composer baru di Phase 8.
 
 ## Next Task
 
-Cek `PROJECT_BLUEPRINT.md` §9/§12 untuk urutan fase berikutnya (mis.
-Evidence/SPJ Package yang menggabungkan banyak `Document` jadi satu
-paket SPJ, atau Notification). Belum ada keputusan arsitektur besar yang
-tertunda dari Phase 7 — 3 keputusan yang ditunda dari Phase 6 (library
-DOCX, strategi PDF, struktur `documents`) semua sudah diputuskan &
-diimplementasikan (lihat D-018).
+**Phase 9 — Dashboard**: dashboard, laporan, timeline (lihat
+`PROJECT_BLUEPRINT.md` §9). Belum ada keputusan arsitektur besar yang
+tertunda dari Phase 8.
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 86
-test, `composer ci` lulus bersih. LibreOffice PDF conversion diverifikasi
-NYATA (bukan mock) lewat smoke test manual + browser end-to-end, bukan
-lewat automated test suite (lihat alasan di atas).
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 98
+test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-018). Baru di Phase 7: D-018
-(library DOCX phpword+TemplateProcessor, LibreOffice wajib untuk PDF,
-`documents` terpisah dengan payment_id opsional, VariableResolver
-kosakata tertutup dengan fallback manual-input, tidak ada permission
-baru, bug binding Livewire dengan key array berisi titik).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-019). Baru di Phase 8: D-019
+(SpjPackage cakupan ganda per-termin/project-level, isi Document+Evidence
+sekaligus, Evidence smart-linking via FK nullable eksplisit bukan
+polymorphic, kelengkapan dihitung dinamis, lifecycle Draft->Finalized
+tanpa versioning, export ZIP sinkron, tidak ada permission baru, bug
+tabel Evidence mirip D-012).
 
 ## Security Notes
 
-Tidak berubah dari Phase 1-6. Dokumen hasil generate disimpan di disk
-`local` (private) sama seperti template/dokumen personel — download
-hanya lewat route berpolicy (`Gate::authorize('view', $document->project)`).
+Tidak berubah dari Phase 1-7. Evidence disimpan di disk `local`
+(private) sama seperti Document/DocumentTemplate/PersonnelDocument —
+download hanya lewat route berpolicy. Export ZIP paket SPJ juga
+digerbangi `Gate::authorize('view', $spjPackage->project)`.

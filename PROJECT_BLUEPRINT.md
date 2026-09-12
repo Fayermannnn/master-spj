@@ -218,3 +218,22 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   nyata via browser terhadap `ReferenceProjectSeeder`, bukan cuma unit
   test). 86 test hijau, `composer ci` lulus. Detail:
   `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-018.
+- **Phase 8 — SPJ Package: SELESAI.** Domain `Evidence` baru (upload
+  bukti pendukung manual, smart-linking FK nullable eksplisit ke
+  payment/personnel/document_requirement, pola sama PersonnelDocument).
+  Domain `Spj`: `SpjPackage` (cakupan ganda — per termin via
+  `payment_id` nullable, atau level project/"SPJ Akhir"; lifecycle
+  Draft->Finalized tanpa jalan balik) + `SpjItem` (manifest, menunjuk
+  satu Document ATAU satu Evidence) + `SpjExportService` (ZIP berisi
+  PDF/file asli tiap item + `manifest.txt`, `ZipArchive` bawaan, tanpa
+  dependency baru). Kelengkapan checklist per paket dihitung DINAMIS
+  terhadap `ChecklistService::applicableRequirements()` yang sudah ada
+  sejak Phase 5 — bukan struktur baru. Tab "Bukti Pendukung" & "Paket
+  SPJ" pada halaman Project. Bug nyata ditemukan lewat phpstan level 8
+  (bukan test gagal): "Evidence" kata tak-berhitung, Eloquent
+  meng-resolve tabelnya jadi "evidence" (singular) bukan "evidences" —
+  sama persis dengan bug Personnel (D-012). Diverifikasi end-to-end
+  sungguhan via browser (generate dokumen + upload evidence + buat
+  paket + tambah manifest + export ZIP asli, isi ZIP diperiksa manual).
+  98 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-019.

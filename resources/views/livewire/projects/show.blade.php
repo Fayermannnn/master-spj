@@ -98,6 +98,20 @@
             >
                 Dokumen
             </button>
+            <button
+                type="button"
+                wire:click="setTab('evidence')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'evidence' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Bukti Pendukung
+            </button>
+            <button
+                type="button"
+                wire:click="setTab('spj')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'spj' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Paket SPJ
+            </button>
         </nav>
     </div>
 
@@ -140,7 +154,11 @@
         <livewire:project-payments.manager :project="$project" :key="'payments-'.$project->id" />
     @elseif ($activeTab === 'checklist')
         <livewire:project-checklist.manager :project="$project" :key="'checklist-'.$project->id" />
-    @else
+    @elseif ($activeTab === 'documents')
         <livewire:generated-documents.manager :project="$project" :key="'documents-'.$project->id" />
+    @elseif ($activeTab === 'evidence')
+        <livewire:evidence.manager :project="$project" :key="'evidence-'.$project->id" />
+    @else
+        <livewire:spj-packages.manager :project="$project" :key="'spj-'.$project->id" />
     @endif
 </div>

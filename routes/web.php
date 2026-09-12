@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\DocumentTemplate\DownloadDocumentTemplateController;
+use App\Http\Controllers\Evidence\DownloadEvidenceController;
 use App\Http\Controllers\GeneratedDocument\DownloadGeneratedDocumentController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
+use App\Http\Controllers\Spj\ExportSpjPackageController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
 use App\Livewire\CostCategories;
@@ -84,6 +86,12 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/generated-documents/{document}/download/{type}', DownloadGeneratedDocumentController::class)
         ->name('generated-documents.download');
+
+    Route::get('/evidences/{evidence}/download', DownloadEvidenceController::class)
+        ->name('evidences.download');
+
+    Route::get('/spj-packages/{spjPackage}/export', ExportSpjPackageController::class)
+        ->name('spj-packages.export');
 
     Route::get('/template-variables', TemplateVariables\Index::class)->name('template-variables.index');
     Route::get('/template-variables/create', TemplateVariables\Form::class)->name('template-variables.create');
