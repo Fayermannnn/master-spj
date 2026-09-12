@@ -297,3 +297,23 @@ Otomatis lengkap dari Foundation sampai QA.**
   hijau (7 baru), `composer ci` lulus, diverifikasi sungguhan di browser
   (termasuk reload berkali-kali setelah perbaikan). Detail:
   `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-022.
+- **Audit Log viewer & self-service Profile — SELESAI.** Dua gap
+  konkret ditutup atas konfirmasi eksplisit user dari daftar kandidat
+  yang diajukan (bukan tebakan). Audit Log: halaman `/audit-logs`
+  (permission baru `audit_logs.viewAny`, super_admin lihat semua,
+  admin_perusahaan hanya aksi anggota organisasinya sendiri lewat
+  `user_id` — `audit_logs` tidak punya kolom organisasi sendiri),
+  filter modul/pengguna/tanggal, detail before/after expand-inline.
+  Profile: halaman `/profile` (tanpa permission khusus — selalu
+  beroperasi ke `Auth::user()` sendiri, tidak ada celah IDOR untuk
+  digerbangi), ubah nama/email + ubah password (rule `current_password`
+  bawaan Laravel), reuse penuh `UserService::update()` dari Phase 1.
+  Bug UX nyata ditemukan & diperbaiki: pesan sukses via
+  `session()->flash()` tidak pernah muncul di halaman yang tidak
+  redirect setelah submit (flash banner global ada di luar boundary
+  render Livewire) — diperbaiki dengan property komponen biasa,
+  bukan session flash. Diverifikasi end-to-end sungguhan di browser
+  (termasuk melihat aksi ubah-password sendiri muncul benar di Audit
+  Log dengan password ter-redaksi, mengonfirmasi ulang D-021). 141 test
+  hijau (11 baru), `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-023.

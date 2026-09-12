@@ -9,6 +9,7 @@ use App\Http\Controllers\GeneratedDocument\DownloadGeneratedDocumentController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
 use App\Http\Controllers\Reports\DownloadProjectSummaryReportController;
 use App\Http\Controllers\Spj\ExportSpjPackageController;
+use App\Livewire\AuditLogs;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
 use App\Livewire\CostCategories;
@@ -18,6 +19,7 @@ use App\Livewire\DocumentTemplates;
 use App\Livewire\Organizations;
 use App\Livewire\Personnel;
 use App\Livewire\PersonnelCategories;
+use App\Livewire\Profile;
 use App\Livewire\Projects;
 use App\Livewire\ProjectTypes;
 use App\Livewire\Reports;
@@ -102,4 +104,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/template-variables', TemplateVariables\Index::class)->name('template-variables.index');
     Route::get('/template-variables/create', TemplateVariables\Form::class)->name('template-variables.create');
     Route::get('/template-variables/{templateVariable}/edit', TemplateVariables\Form::class)->name('template-variables.edit');
+
+    Route::get('/audit-logs', AuditLogs\Index::class)->name('audit-logs.index');
+
+    Route::get('/profile', Profile\Edit::class)->name('profile.edit');
 });

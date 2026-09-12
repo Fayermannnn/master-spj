@@ -911,3 +911,79 @@ end-to-end sungguhan di browser: bell menampilkan 4 alert nyata
 langsung mengurangi badge TANPA reload, dan (setelah perbaikan poin 6)
 alert yang di-dismiss TETAP tersembunyi setelah reload halaman berkali-
 kali berturut-turut.
+
+## D-023 — Audit Log viewer & self-service Profile: dua gap konkret ditutup, bukan permintaan terbuka
+
+**Konteks:** Setelah fitur Notification, user bertanya "fitur apa lagi
+yang mungkin dibutuhkan". Sebelum menjawab, dicek LANGSUNG ke kode
+(bukan menebak) — ditemukan 2 gap KONKRET, bukan sekadar ide: (1)
+`audit_logs` sudah terisi sejak Phase 1 oleh SETIAP domain, tapi TIDAK
+PERNAH ada UI untuk membacanya; (2) TIDAK ADA sama sekali halaman bagi
+user yang sedang login untuk mengubah profil/password MILIKNYA SENDIRI
+(`Users\Form` hanya untuk admin mengelola user LAIN). Dua gap ini
+dipilih (dari 4 kandidat yang diajukan) karena user menjawab "Ya" untuk
+keduanya secara eksplisit — bukan asumsi sepihak.
+
+**Keputusan:**
+
+1. **Audit Log discope lewat organisasi PELAKU (`user_id`), bukan
+   subjek** — `audit_logs` tidak punya kolom `organization_id` sendiri,
+   dan subjek yang diaudit bisa berupa master data global tanpa
+   organisasi sama sekali (TaxType, ProjectType, dst). Satu-satunya
+   cara scoping yang konsisten untuk SEMUA jenis subjek: siapa yang
+   MELAKUKAN aksi. super_admin melihat semua; admin_perusahaan hanya
+   melihat aksi yang dilakukan anggota organisasinya sendiri. Permission
+   baru `audit_logs.viewAny` — HANYA diberikan ke super_admin (otomatis,
+   semua permission) dan admin_perusahaan; role lain tidak dapat akses
+   sama sekali (RBAC default-deny, bukan oversight).
+2. **`AuditLogPolicy` hanya punya `viewAny()`** — tidak ada `view()`
+   per-baris karena tampilan berupa daftar dengan scoping di level
+   query (pola sama Projects/Users/Clients Index), dan tidak ada
+   update/delete untuk digerbangi (append-only, RULE 6, sudah
+   ditegakkan di model `AuditLog` sendiri sejak Phase 1).
+3. **Detail before/after ditampilkan expand-inline per baris** (bukan
+   halaman terpisah) — `<pre>` JSON diformat, toggle lewat satu
+   property `$expandedLogId`. Diverifikasi LANGSUNG lewat data audit
+   sungguhan hasil aksi manual di browser (ubah password sendiri) —
+   sekaligus mengonfirmasi ULANG bahwa redaksi password dari D-021
+   masih berfungsi (kolom `password`/`remember_token` memang tidak
+   pernah muncul di JSON before/after yang ditampilkan).
+4. **Profile self-service TIDAK memakai `UserPolicy`/`authorize()` sama
+   sekali** — operasinya SELALU terhadap `Auth::user()` sendiri, tidak
+   pernah menerima ID user dari request/route manapun, jadi tidak ada
+   celah IDOR yang perlu digerbangi permission. Cukup middleware `auth`
+   di route. Reuse penuh `UserService::update()` yang sudah ada (Phase 1)
+   untuk kedua form (profil: `name`/`email`; password: hanya
+   `password`, field lain di `$data` sengaja tidak diisi supaya
+   `organization_id`/roles/`is_active` tidak pernah ikut berubah lewat
+   jalur ini).
+5. **Ubah password pakai rule `current_password`** bawaan Laravel
+   (verifikasi terhadap guard `web` aktif) — tidak perlu logic verifikasi
+   manual.
+6. **Bug UX nyata ditemukan & diperbaiki SEBELUM ditulis ke test**
+   (lewat verifikasi browser): pesan sukses (`session()->flash('status')`)
+   yang sama seperti dipakai domain lain TIDAK PERNAH muncul di halaman
+   Profil, karena flash banner global dirender di `layouts/app.blade.php`
+   (di LUAR boundary komponen Livewire `Profile\Edit`) — Livewire hanya
+   me-render ulang markup KOMPONEN itu sendiri saat `wire:submit`, bukan
+   shell layout di sekelilingnya, kecuali ada REDIRECT (pola yang dipakai
+   `Users\Form::save()` — redirect ke `users.index` setelah flash).
+   Karena halaman Profil sengaja TIDAK redirect (dua form ada di satu
+   halaman yang sama, redirect ke diri sendiri hanya menambah round-trip
+   tanpa manfaat), diperbaiki dengan DUA property Livewire biasa
+   (`$profileStatus`/`$passwordStatus`, TERPISAH supaya submit satu form
+   tidak menimpa pesan sukses form lainnya) yang dirender LANGSUNG di
+   dalam blade komponen itu sendiri — bukan lewat session flash sama
+   sekali. **Pelajaran untuk komponen top-level lain yang tidak
+   redirect setelah submit**: kalau halaman punya lebih dari satu aksi
+   independen dan tidak berpindah halaman, pesan sukses harus jadi
+   property komponen biasa, BUKAN `session()->flash()` (yang hanya
+   bekerja lewat navigasi/redirect penuh).
+
+**Hasil:** 141 test (11 baru — 5 AuditLogs, 6 Profile), `composer ci`
+bersih. Diverifikasi end-to-end sungguhan di browser: audit log
+menampilkan aksi nyata (ubah password sendiri) dengan before/after yang
+benar dan password ter-redaksi, profil ter-update, password salah
+ditolak dengan pesan Laravel bawaan, password benar berhasil diubah
+dengan pesan sukses yang (setelah perbaikan poin 6) benar-benar tampil
+di layar.

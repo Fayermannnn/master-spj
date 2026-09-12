@@ -5,140 +5,131 @@ lanjut tanpa kehilangan konteks.
 
 ## Current Phase
 
-**Roadmap 10-fase awal SELESAI (Phase 1-10).** Fase tambahan pertama di
-luar roadmap: **Notification — SELESAI.** Repo di-push ke GitHub
-(`https://github.com/Fayermannnn/master-spj`, Public — dikonfirmasi user).
+**Roadmap 10-fase awal SELESAI (Phase 1-10).** Fase tambahan di luar
+roadmap: **Notification — SELESAI**, **Audit Log viewer & self-service
+Profile — SELESAI**. Repo di-push ke GitHub
+(`https://github.com/Fayermannnn/master-spj`, Public — dikonfirmasi
+user).
 
 ## Completed Features
 
 ### Phase 1-10 (ringkas — detail di git log / PROJECT_DECISIONS.md D-001 s/d D-021)
 Auth, RBAC, Organization, User Management, ProjectType, Client+Contact,
-Project (status siklus), Contract, PersonnelCategory, Personnel (+
-dokumen), PersonnelAssignment, TaxType, CostCategory, CostItem, Payment,
-DocumentRequirement + RequirementRule + RequirementRuleEvaluator +
-ProjectChecklistItem, TemplateVariable + DocumentTemplate +
-DocxPlaceholderScanner, VariableResolver + DocumentGeneratorService,
-Evidence + SpjPackage/SpjItem, Workplan (Milestone/Deliverable) +
-Reporting (Laporan Ringkasan Project), Dashboard, dan Phase 10 QA
-(security/performance/test/UX hardening menyeluruh — lihat D-021).
+Project, Contract, PersonnelCategory, Personnel, PersonnelAssignment,
+TaxType, CostCategory, CostItem, Payment, DocumentRequirement Engine,
+TemplateVariable + DocumentTemplate, DocumentGenerator (DOCX+PDF via
+phpword+LibreOffice), Evidence + SpjPackage/SpjItem, Workplan +
+Reporting, Dashboard, Phase 10 QA (security/performance/test/UX
+hardening menyeluruh).
 
-### Notification (baru, di luar roadmap awal) — D-022
+### Notification (D-022)
+`NotificationService` menghitung alert LIVE (sertifikat personel akan/
+sudah kadaluarsa, milestone terlambat, termin terlambat, checklist
+belum lengkap) dari data yang sudah ada — TIDAK ADA tabel isi
+notifikasi/scheduler. Bell global di setiap halaman, cache 5 menit per
+user, dismiss dipersist lewat `NotificationDismissal`. **Pelajaran
+penting**: JANGAN PERNAH `Cache::remember()` sebuah Collection/objek/
+enum langsung — selalu array/scalar murni (bug nyata ditemukan &
+diperbaiki, lihat D-022).
 
-- **`app/Domain/Notification/Services/NotificationService.php`** —
-  menghitung alert LIVE (bukan menyimpan isi notifikasi) dari 4 sumber:
-  - Sertifikat Personnel akan kadaluarsa (≤30 hari) atau sudah lewat
-    (`certificate_expiry_date`), di-scope per organisasi personel
-    langsung (tidak bergantung status project).
-  - Milestone terlambat (`target_date` lewat, status bukan Completed),
-    hanya untuk project berstatus Preparation/Active/PaymentProcessing.
-  - Payment/termin terlambat (`target_date` lewat, status bukan
-    Paid/Rejected), scope project sama seperti milestone.
-  - Checklist belum lengkap — SATU alert PER PROJECT (agregat jumlah
-    item Missing, bukan satu per item), hanya project Active/
-    PaymentProcessing. **Sengaja TIDAK memanggil `ChecklistService::sync()`**
-    di jalur ini (method ini jalan di SETIAP request lewat bell
-    global — memanggil sync() di sana akan mengulang masalah performa
-    D-021 tapi jauh lebih parah, di semua halaman bukan cuma Laporan).
-    Konsekuensi: project yang checklist-nya belum pernah dibuka sama
-    sekali tidak akan muncul sampai seseorang membuka tab Checklist-nya
-    minimal sekali.
-- **`NotificationDismissal`** (model+migration) — satu-satunya yang
-  dipersist: penanda "sudah ditutup" per user per `dismissal_key`
-  string (mis. `"milestone:{id}"`), BUKAN foreign key relasional ke
-  4 jenis sumber berbeda.
-- **Bell notifikasi global** (`app/Livewire/Notifications/Bell.php`,
-  dirender di `layouts/app.blade.php` pada SETIAP halaman) — badge
-  jumlah alert, dropdown Alpine.js daftar alert dengan link ke halaman
-  terkait dan tombol dismiss per item.
-- **Cache 5 menit per user** (`Cache::remember`, driver `database`) —
-  supaya bell yang jalan di setiap halaman tidak N+1 di setiap request.
-  `dismiss()` memanggil `Cache::forget()` supaya penutupan terasa
-  instan.
-- **Bug nyata ditemukan lewat reload browser (BUKAN test otomatis)**:
-  percobaan pertama meng-cache objek `Collection` PHP yang isinya
-  instance enum `NotificationType` LANGSUNG — reload KEDUA (setelah
-  cache tersimpan) menghasilkan 500
-  `"tried to call a method on an incomplete object... Collection...
-  was loaded before unserialize()"`. Cache driver `database`
-  men-serialize lewat `serialize()` PHP native — objek di dalamnya
-  rapuh terhadap pergeseran bentuk class antar iterasi kode. Diperbaiki:
-  cache ARRAY MENTAH (`->all()`) dengan `type` sebagai string `->value`,
-  bukan Collection+enum. **PELAJARAN PENTING untuk fitur mendatang**:
-  JANGAN PERNAH `Cache::remember()` sebuah Collection/objek/enum secara
-  langsung — selalu ubah ke array/scalar murni dulu, berlaku untuk
-  SEMUA cache driver (bukan cuma `database`), karena akar masalahnya
-  adalah fragilitas `serialize()`/`unserialize()` PHP native terhadap
-  perubahan bentuk class, bukan sesuatu yang spesifik ke satu driver.
-- Tidak ada permission baru — scoping organisasi dilakukan di dalam
-  `NotificationService` sendiri (pola sama Dashboard/Reports).
-- 7 test baru (130 total) — `tests/Feature/Notifications/NotificationServiceTest.php`:
-  4 jenis alert masing-masing, agregasi checklist per project, scoping
-  organisasi (super_admin vs organisasi sendiri), dismiss langsung
-  menyembunyikan alert meski masih dalam window cache, dismiss lewat
-  komponen Bell. Diverifikasi juga end-to-end di browser (termasuk
-  reload berkali-kali setelah perbaikan bug cache, untuk memastikan
-  tidak berulang).
+### Audit Log viewer & self-service Profile (baru — D-023)
+
+- **`/audit-logs`** (`app/Livewire/AuditLogs/Index.php`) — permission
+  baru `audit_logs.viewAny` (super_admin: semua; admin_perusahaan:
+  hanya aksi anggota organisasinya sendiri via `user_id`, karena
+  `audit_logs` tidak punya kolom organisasi sendiri dan subjek yang
+  diaudit bisa berupa master data global). Filter modul/pengguna/
+  tanggal, detail before/after expand-inline per baris. `AuditLogPolicy`
+  hanya punya `viewAny()` — append-only, tidak ada update/delete untuk
+  digerbangi.
+- **`/profile`** (`app/Livewire/Profile/Edit.php`) — self-service ubah
+  nama/email + password MILIK SENDIRI. TIDAK ADA `authorize()` sama
+  sekali (selalu beroperasi ke `Auth::user()`, tidak pernah menerima ID
+  dari luar — tidak ada celah IDOR). Reuse penuh `UserService::update()`
+  dari Phase 1. Password pakai rule `current_password` bawaan Laravel.
+  Link dari header (nama user yang bisa diklik).
+- **Bug UX nyata ditemukan & diperbaiki** (lewat verifikasi browser):
+  `session()->flash('status')` TIDAK PERNAH muncul di halaman Profil —
+  flash banner global ada di `layouts/app.blade.php`, DI LUAR boundary
+  render Livewire komponen `Profile\Edit`, dan halaman ini sengaja
+  tidak redirect setelah submit (beda dari `Users\Form` yang redirect
+  ke index). Diperbaiki dengan DUA property Livewire biasa
+  (`$profileStatus`/`$passwordStatus`, terpisah supaya tidak saling
+  menimpa) yang dirender langsung di blade komponen. **Pelajaran untuk
+  komponen top-level lain yang tidak redirect setelah submit**: pesan
+  sukses harus jadi property komponen, BUKAN session flash.
+- Diverifikasi end-to-end sungguhan di browser — termasuk melihat aksi
+  ubah-password-sendiri muncul benar di Audit Log dengan
+  password/remember_token TETAP tidak muncul di JSON before/after
+  (mengonfirmasi ulang redaksi D-021 masih berfungsi).
+- 11 test baru (141 total) — `tests/Feature/AuditLogs/AuditLogViewingTest.php`
+  (5: super_admin lihat semua, admin_perusahaan discope ke organisasi
+  sendiri, filter modul, toggle detail, tolak role tanpa permission) dan
+  `tests/Feature/Profile/ProfileManagementTest.php` (6: update nama/
+  email, tolak email duplikat, ubah password sukses, tolak password
+  saat ini salah, tolak password baru terlalu pendek, semua role bisa
+  akses halaman sendiri).
 
 ## Repository
 
-Di-push ke GitHub: `https://github.com/Fayermannnn/master-spj`
-(**Public** — dikonfirmasi eksplisit oleh user, bukan default yang
-disarankan). Branch `main` + semua tag `phase0-complete` s/d
-`phase10-complete`. Remote `origin` sudah dikonfigurasi di repo lokal;
-push berikutnya tinggal `git push` / `git push --tags` seperti biasa.
+`https://github.com/Fayermannnn/master-spj` (**Public**, dikonfirmasi
+user). Branch `main` + tag `phase0-complete` s/d `phase10-complete` +
+`notification-feature-complete`. Remote `origin` sudah dikonfigurasi —
+push berikutnya tinggal `git push` / `git push --tags`.
 
 ## Known Issues / Deferred
 
-Lihat bagian yang sama di riwayat git `PROJECT_HANDOVER.md` sebelum
-fase Notification (Phase 10 QA) untuk backlog QA yang belum dikerjakan
-(test transisi status enum lain, test file hilang pasca soft-delete,
-dst — semuanya masih berlaku, belum dikerjakan di fase Notification
-ini).
+Backlog QA Phase 10 (test transisi status enum lain, test file hilang
+pasca soft-delete) masih berlaku, belum dikerjakan.
 
-Tambahan dari fase Notification:
-- Alert checklist tidak akan muncul untuk project yang checklist-nya
-  belum pernah disinkronkan sama sekali (lihat penjelasan di atas) —
-  pembatasan yang disengaja demi performa, bukan bug.
-- Belum ada channel notifikasi selain in-app (tidak ada email/push) —
-  sesuai deskripsi domain asli ("Notifikasi in-app"), bukan kekurangan.
-- Domain `Settings` dan `Workflow` (dari 19 domain awal) masih belum
-  diimplementasikan — tidak ada kebutuhan konkret yang mendorongnya
-  sejauh ini (lihat alasan pemilihan Notification di D-022).
+Tambahan:
+- Audit Log admin_perusahaan TIDAK melihat aksi yang dilakukan
+  super_admin terhadap data organisasinya (mis. kalau super_admin
+  pernah mengedit sesuatu di organisasi mereka) — scoping murni lewat
+  organisasi PELAKU, bukan organisasi SUBJEK (lihat alasan di D-023).
+  Ini keterbatasan yang disengaja, bukan bug.
+- Tidak ada halaman "riwayat login" terpisah dari Audit Log umum.
+- Domain `Settings` dan `Workflow` masih belum diimplementasikan —
+  tidak ada kebutuhan konkret yang mendorongnya.
 
 ## Environment
 
-Dependency baru: tidak ada (Notification tidak menambah composer
-package). **Catatan yang masih berlaku dari Phase 10**: jalankan
-`npm run build` setelah mengubah class Tailwind di Blade manapun —
-`.claude/launch.json` tidak menjalankan Vite dev server yang watch.
+Dependency baru: tidak ada. Tidak ada perubahan Tailwind class baru di
+fitur ini yang butuh `npm run build` ulang di luar yang sudah dilakukan
+sesi ini — tapi **aturan Phase 10 tetap berlaku**: selalu `npm run
+build` setelah mengubah class Tailwind di Blade manapun sebelum
+verifikasi browser (`.claude/launch.json` tidak menjalankan Vite dev
+server yang watch).
 
 ## Next Task
 
-Tidak ada fase terjadwal berikutnya. Kemungkinan arah:
-1. Fitur baru lain dari 19 domain yang belum terisi (`Settings`,
-   `Workflow`) — HANYA kalau ada kebutuhan konkret, jangan
-   diimplementasikan tanpa alasan jelas (lihat RULE 9 CLAUDE.md).
-2. Backlog QA Phase 10 (lihat Known Issues di atas).
+Tidak ada fase terjadwal berikutnya. Kemungkinan arah (lihat juga opsi
+yang sempat diajukan tapi belum dipilih user: SPJ submission tracking/
+`deliverable.name` wiring ke Deliverable model — lihat riwayat chat/
+D-022 konteks):
+1. Fitur baru lain sesuai kebutuhan konkret yang muncul.
+2. Backlog QA Phase 10.
 3. Permintaan fitur baru dari user.
-4. Production/deployment readiness — belum pernah dibahas, kalau
-   diminta ini keputusan arsitektur besar baru (RULE 10).
+4. Production/deployment readiness — keputusan arsitektur besar baru
+   kalau diminta (RULE 10).
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 130
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 141
 test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-022). Baru: D-022 (domain
-Notification baru, alert dihitung live tanpa tabel/scheduler, cache
-5 menit untuk bell global, bug cache Collection+enum ditemukan &
-diperbaiki — pelajaran berlaku untuk semua fitur mendatang yang
-memakai `Cache::remember()`).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-023). Baru: D-023 (Audit Log
+viewer discope lewat organisasi pelaku bukan subjek, permission baru
+`audit_logs.viewAny`, self-service Profile tanpa authorize() karena
+selalu beroperasi ke diri sendiri, bug flash message pada komponen
+non-redirect ditemukan & diperbaiki).
 
 ## Security Notes
 
-Tidak berubah dari Phase 10. Notification tidak menambah permukaan
-serangan baru — bell hanya membaca data yang sudah di-scope organisasi
-di service-nya sendiri, `NotificationDismissal` hanya berisi string
-key + user_id (tidak ada data sensitif).
+Tidak berubah dari D-021/D-022. Audit Log viewer sendiri TIDAK menambah
+permukaan serangan — hanya membaca data yang sudah ada dengan scoping
+ketat; halaman Profil hanya bisa mengubah data milik user yang sedang
+login sendiri (diverifikasi: tidak ada parameter yang bisa
+memengaruhi user MANA yang diubah).

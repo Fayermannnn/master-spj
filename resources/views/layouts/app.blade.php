@@ -107,6 +107,12 @@
                             <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                                 Pengguna
                             </x-nav-link>
+
+                            @can('viewAny', \App\Models\AuditLog::class)
+                                <x-nav-link :href="route('audit-logs.index')" :active="request()->routeIs('audit-logs.*')">
+                                    Audit Log
+                                </x-nav-link>
+                            @endcan
                         </div>
                     @endcan
                 </nav>
@@ -143,12 +149,12 @@
                         @auth
                             <livewire:notifications.bell />
 
-                            <div class="hidden text-right sm:block">
+                            <a href="{{ route('profile.edit') }}" wire:navigate class="hidden text-right hover:opacity-75 sm:block">
                                 <p class="text-sm font-medium text-slate-900">{{ auth()->user()->name }}</p>
                                 <p class="text-xs text-slate-500">
                                     {{ auth()->user()->getRoleNames()->first() ?? '—' }}
                                 </p>
-                            </div>
+                            </a>
 
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf

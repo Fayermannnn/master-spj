@@ -52,4 +52,6 @@ enum PermissionName: string
 
     case DocumentRequirementsManage = 'document_requirements.manage';
     case TemplateVariablesManage = 'template_variables.manage';
+
+    case AuditLogsViewAny = 'audit_logs.viewAny';
 }

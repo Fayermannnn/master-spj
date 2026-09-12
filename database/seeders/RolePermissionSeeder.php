@@ -62,6 +62,7 @@ class RolePermissionSeeder extends Seeder
             PermissionName::PersonnelUpdate->value,
             PermissionName::PersonnelDelete->value,
             PermissionName::PersonnelAssignmentsManage->value,
+            PermissionName::AuditLogsViewAny->value,
         ]);
 
         // personnel.create/update/delete SENGAJA tidak diberikan ke
