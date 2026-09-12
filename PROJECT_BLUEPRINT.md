@@ -237,3 +237,20 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   paket + tambah manifest + export ZIP asli, isi ZIP diperiksa manual).
   98 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
   `PROJECT_DECISIONS.md` D-019.
+- **Phase 9 — Dashboard: SELESAI.** Domain `Workplan` baru: `Milestone`
+  + `Deliverable` (status bersama `WorkplanStatus`, "Terlambat"
+  dihitung dinamis) dengan visual timeline "Gantt-lite" (marker
+  posisi persentase dalam rentang tanggal project) pada tab baru
+  "Timeline" di halaman Project. Domain `Reporting` baru:
+  `ProjectSummaryReportService` (satu sumber kebenaran filter+angka
+  untuk layar maupun ekspor) + `ProjectSummaryExcelExporter`
+  (`phpoffice/phpspreadsheet` langsung) + `ProjectSummaryPdfExporter`
+  (reuse penuh `PdfConverterInterface`/LibreOffice dari Phase 7 —
+  tanpa dependency PDF baru) — halaman "Laporan Ringkasan Project"
+  dengan filter + unduh Excel/PDF. Dashboard diisi widget agregat
+  nyata (total project, project aktif, nilai kontrak, breakdown
+  status, milestone terdekat) menggantikan placeholder "coming soon".
+  Diverifikasi end-to-end sungguhan via browser (marker timeline
+  diperiksa lewat DOM, unduh Excel & PDF asli diperiksa header/isi).
+  110 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-020.

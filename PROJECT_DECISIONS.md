@@ -611,3 +611,81 @@ sekaligus) sambil menahan diri dari over-engineering di setiap area yang
 TIDAK diminta eksplisit (tanpa polymorphic, tanpa versioning paket, tanpa
 queue, tanpa requirement-per-termin terpisah) — konsisten dengan RULE 67
 dan pola keputusan yang sudah terbukti di fase-fase sebelumnya.
+
+## D-020 — Dashboard: domain Workplan baru (milestone/deliverable), laporan Excel+PDF reuse infrastruktur Phase 7
+
+**Konteks:** Roadmap Phase 9 ("Dashboard — dashboard, laporan, timeline")
+sama minimnya dengan Phase 8 — hanya tiga kata kunci tanpa detail. Dua
+ambiguitas besar ditanyakan ke user lewat `AskUserQuestion` sebelum
+implementasi (RULE 10): (1) arti "timeline" — feed aktivitas dari
+AuditLog yang sudah ada (ringan) vs domain Workplan baru untuk
+milestone/deliverable (berat); (2) cakupan "laporan" — widget dashboard
+saja vs halaman Laporan tersendiri + unduh PDF/Excel. User memilih
+opsi yang LEBIH BESAR untuk keduanya.
+
+**Keputusan:**
+
+1. **Domain `Workplan` baru** — `Milestone` (titik pemeriksaan timeline,
+   mis. "Laporan Pendahuluan Diserahkan") dan `Deliverable` (output
+   project, mis. "DED Blok Plan" — cocok dengan istilah "Lingkup" di
+   `PROJECT_BLUEPRINT.md` §3) sebagai model TERPISAH tapi terhubung
+   (`Deliverable.milestone_id` NULLABLE — deliverable boleh berdiri
+   sendiri atau terkait satu milestone). Status dipakai BERSAMA lewat
+   satu enum `WorkplanStatus` (Pending/InProgress/Completed) — bukan
+   FSM generik (pola sama D-010). "Terlambat" (`isOverdue()`) dihitung
+   DINAMIS dari `target_date` vs hari ini, BUKAN status tersimpan —
+   supaya tidak perlu job terjadwal.
+2. **Visual "Gantt-lite"** pada tab Timeline — marker milestone
+   diposisikan sebagai persentase dalam rentang `project.start_date`/
+   `end_date` (`Manager::timelinePosition()`), warna berbeda untuk
+   Completed (hijau) vs Terlambat (merah) vs Pending biasa (biru).
+   BUKAN chart library (Chart.js dll.) — cukup `<div>` + `style="left:
+   X%"` (RULE 67), diverifikasi via inspeksi DOM langsung (posisi
+   persentase benar: 12.7%/53.6%/clamp ke 100% untuk tanggal di luar
+   rentang project).
+3. **Laporan: SATU laporan well-scoped ("Laporan Ringkasan Project"),
+   BUKAN report builder generik** — tabel lintas-project (kode, nama,
+   klien, status, nilai kontrak, total dibayar, kelengkapan checklist)
+   dengan filter (cari, status, klien) yang SAMA persis dipakai baik
+   oleh tampilan layar maupun ekspor (`ProjectSummaryReportService`
+   satu sumber kebenaran) — mencegah angka yang beda antara yang
+   dilihat di layar vs yang diunduh.
+4. **Excel: `phpoffice/phpspreadsheet` LANGSUNG**, bukan wrapper
+   `maatwebsite/laravel-excel` — konsisten dengan gaya aplikasi ini
+   yang selalu memakai library inti langsung tanpa lapisan abstraksi
+   tambahan (`ZipArchive`, `phpword` `TemplateProcessor` juga dipakai
+   langsung, bukan lewat wrapper). Sekeluarga dengan `phpoffice/phpword`
+   yang sudah terpasang sejak Phase 7, jadi footprint dependency
+   tambahan minimal.
+5. **PDF laporan: REUSE PENUH `PdfConverterInterface`/`LibreOfficePdfConverter`
+   dari Phase 7** — bangun tabel laporan sebagai DOCX lewat `phpword`
+   (bukan `TemplateProcessor`, cukup `addTable()`/`addText()` biasa
+   karena tidak ada placeholder untuk diisi), konversi PDF lewat
+   pipeline LibreOffice yang SAMA. TIDAK menambah library PDF baru
+   (dompdf/snappy/dst) hanya untuk satu tabel laporan sederhana
+   (RULE 67) — satu infrastruktur PDF untuk seluruh aplikasi.
+6. **Domain `Reporting` baru** (bukan salah satu dari 19 domain awal
+   D-005) — dibuat karena logika lintas-project/agregasi tidak cocok
+   masuk `ProjectManagement` (yang fokus CRUD/siklus SATU project).
+   Tidak ada `docs/domain-map.md` yang melarang penambahan domain baru
+   di repo ini (CLAUDE.md RULE 1 mereferensikannya tapi filenya tidak
+   pernah dibuat) — domain baru yang well-justified tetap sejalan
+   dengan prinsip modular monolith selama scope-nya jelas.
+7. **Scoping laporan & dashboard**: pola SAMA dengan `Projects\Index`
+   yang sudah ada sejak Phase 2 — `when(!$viewer->hasRole('super_admin'),
+   fn ($q) => $q->where('organization_id', $viewer->organization_id))`.
+   Tidak ada permission baru — digerbangi `projects.viewAny` yang sudah
+   ada (laporan pada dasarnya adalah tampilan agregat dari data Project
+   yang sama).
+8. **Dashboard**: total project, project aktif, total nilai kontrak
+   (agregat, org-scoped), breakdown per status, dan "Milestone
+   Terdekat" (5 milestone belum Completed terdekat lintas project,
+   dari domain Workplan yang baru — koneksi alami antara widget
+   dashboard dan timeline per-project).
+
+**Alasan ringkas:** Menghormati pilihan user (Workplan penuh + halaman
+laporan+unduh) sambil tetap menahan diri dari scope creep di detail
+implementasi yang tidak diminta eksplisit — tanpa report builder
+generik, tanpa chart library, tanpa dependency PDF baru, tanpa
+permission baru — memakai kembali sebanyak mungkin infrastruktur yang
+sudah terbukti dari fase-fase sebelumnya (RULE 67).

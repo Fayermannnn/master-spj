@@ -112,6 +112,13 @@
             >
                 Paket SPJ
             </button>
+            <button
+                type="button"
+                wire:click="setTab('timeline')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'timeline' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Timeline
+            </button>
         </nav>
     </div>
 
@@ -158,7 +165,9 @@
         <livewire:generated-documents.manager :project="$project" :key="'documents-'.$project->id" />
     @elseif ($activeTab === 'evidence')
         <livewire:evidence.manager :project="$project" :key="'evidence-'.$project->id" />
-    @else
+    @elseif ($activeTab === 'spj')
         <livewire:spj-packages.manager :project="$project" :key="'spj-'.$project->id" />
+    @else
+        <livewire:workplan.manager :project="$project" :key="'workplan-'.$project->id" />
     @endif
 </div>

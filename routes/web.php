@@ -7,6 +7,7 @@ use App\Http\Controllers\DocumentTemplate\DownloadDocumentTemplateController;
 use App\Http\Controllers\Evidence\DownloadEvidenceController;
 use App\Http\Controllers\GeneratedDocument\DownloadGeneratedDocumentController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
+use App\Http\Controllers\Reports\DownloadProjectSummaryReportController;
 use App\Http\Controllers\Spj\ExportSpjPackageController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
@@ -19,6 +20,7 @@ use App\Livewire\Personnel;
 use App\Livewire\PersonnelCategories;
 use App\Livewire\Projects;
 use App\Livewire\ProjectTypes;
+use App\Livewire\Reports;
 use App\Livewire\TaxTypes;
 use App\Livewire\TemplateVariables;
 use App\Livewire\Users;
@@ -92,6 +94,10 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/spj-packages/{spjPackage}/export', ExportSpjPackageController::class)
         ->name('spj-packages.export');
+
+    Route::get('/reports/project-summary', Reports\ProjectSummary::class)->name('reports.project-summary');
+    Route::get('/reports/project-summary/download', DownloadProjectSummaryReportController::class)
+        ->name('reports.project-summary.download');
 
     Route::get('/template-variables', TemplateVariables\Index::class)->name('template-variables.index');
     Route::get('/template-variables/create', TemplateVariables\Form::class)->name('template-variables.create');

@@ -152,4 +152,20 @@ class Project extends Model
     {
         return $this->hasMany(SpjPackage::class);
     }
+
+    /**
+     * @return HasMany<Milestone, $this>
+     */
+    public function milestones(): HasMany
+    {
+        return $this->hasMany(Milestone::class);
+    }
+
+    /**
+     * @return HasMany<Deliverable, $this>
+     */
+    public function deliverables(): HasMany
+    {
+        return $this->hasMany(Deliverable::class);
+    }
 }

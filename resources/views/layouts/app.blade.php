@@ -51,6 +51,10 @@
                                     Personel
                                 </x-nav-link>
                             @endcan
+
+                            <x-nav-link :href="route('reports.project-summary')" :active="request()->routeIs('reports.*')">
+                                Laporan
+                            </x-nav-link>
                         </div>
                     @endcan
 
