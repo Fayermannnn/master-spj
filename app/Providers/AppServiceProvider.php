@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\DocumentGenerator\Contracts\PdfConverterInterface;
+use App\Domain\DocumentGenerator\Services\LibreOfficePdfConverter;
 use App\Domain\Identity\Enums\RoleName;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
@@ -16,7 +18,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(PdfConverterInterface::class, LibreOfficePdfConverter::class);
     }
 
     /**

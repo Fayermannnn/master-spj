@@ -56,8 +56,8 @@ otomatis menjadi requirement SPJ.
 | Styling | Tailwind CSS 4 |
 | Auth | Laravel built-in auth (session) |
 | Authorization | Spatie-style Policy per model + role/permission tabel sendiri |
-| DOCX | `phpoffice/phpword` (generation) — dipilih di Phase 7 |
-| PDF | converter configurable (evaluasi `phpoffice/phpword` + LibreOffice headless, atau `spatie/browsershot`) — diputuskan di Phase 7 |
+| DOCX | `phpoffice/phpword` `TemplateProcessor`, delimiter `{{ }}` (Phase 7, D-018) |
+| PDF | LibreOffice headless (`soffice --convert-to pdf`) via `Illuminate\Support\Facades\Process`, wajib terpasang (Phase 7, D-018) |
 | Queue | Laravel Queue (database driver awal) |
 | Testing | Pest 4 + pest-plugin-laravel |
 | Static analysis | Larastan (level 8) |
@@ -205,7 +205,16 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   DocxPlaceholderScanner (scan `{{variable}}` di DOCX pakai ZipArchive
   bawaan, tanpa dependency baru). 79 test hijau, `composer ci` lulus.
   Detail: `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-016/D-017.
-- **Phase 7 — Document Generator: BERIKUTNYA.** Mengisi template dari
-  data project & menghasilkan DOCX/PDF sungguhan — di sinilah pemilihan
-  library generate (phpoffice/phpword atau alternatif) akhirnya
-  diputuskan dengan konteks penuh (lihat D-016).
+- **Phase 7 — Document Generator: SELESAI.** VariableResolver (kosakata
+  tertutup Project/Client/Contract/Personnel/Payment/Organization),
+  DocumentGeneratorService memakai `phpoffice/phpword`
+  `TemplateProcessor` (delimiter `{{ }}`, `cloneRowAndSetValues` untuk
+  tabel personel berulang §21) + `LibreOfficePdfConverter` (LibreOffice
+  headless wajib terpasang, dijalankan lewat `Illuminate\Support\Facades\Process`
+  bawaan framework), tabel `documents` terpisah dari checklist dengan
+  `data_snapshot` (§61-62) dan versi per requirement, otomatis
+  meng-update `ProjectChecklistItem` jadi Fulfilled. Tab "Dokumen" pada
+  halaman Project. Diverifikasi end-to-end sungguhan (generate DOCX+PDF
+  nyata via browser terhadap `ReferenceProjectSeeder`, bukan cuma unit
+  test). 86 test hijau, `composer ci` lulus. Detail:
+  `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-018.

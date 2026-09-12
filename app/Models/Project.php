@@ -128,4 +128,12 @@ class Project extends Model
     {
         return $this->hasMany(ProjectChecklistItem::class);
     }
+
+    /**
+     * @return HasMany<Document, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
 }

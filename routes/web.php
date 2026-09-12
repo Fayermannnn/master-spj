@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\DocumentTemplate\DownloadDocumentTemplateController;
+use App\Http\Controllers\GeneratedDocument\DownloadGeneratedDocumentController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
@@ -80,6 +81,9 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/document-templates/{documentTemplate}/download', DownloadDocumentTemplateController::class)
         ->name('document-templates.download');
+
+    Route::get('/generated-documents/{document}/download/{type}', DownloadGeneratedDocumentController::class)
+        ->name('generated-documents.download');
 
     Route::get('/template-variables', TemplateVariables\Index::class)->name('template-variables.index');
     Route::get('/template-variables/create', TemplateVariables\Form::class)->name('template-variables.create');

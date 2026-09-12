@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Shared\Services;
 
+use Illuminate\Http\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -44,6 +45,32 @@ class FileStorageService
             'original_filename' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType() ?? 'application/octet-stream',
             'size' => $file->getSize(),
+        ];
+    }
+
+    /**
+     * Menyimpan file yang sudah ada di disk lokal (bukan hasil upload
+     * HTTP) — dipakai DocumentGenerator untuk menyimpan file DOCX/PDF
+     * hasil generate, sebagai method tambahan (additive) di samping
+     * `store()` yang khusus `UploadedFile`, tanpa mengubah kontrak lama.
+     *
+     * @return array{disk: string, path: string, original_filename: string, mime_type: string, size: int}
+     */
+    public function storeFromPath(string $absolutePath, string $directory, string $filename, string $mimeType, ?string $disk = null): array
+    {
+        $disk ??= self::DEFAULT_DISK;
+        $path = Storage::disk($disk)->putFileAs($directory, new File($absolutePath), $filename);
+
+        if ($path === false) {
+            throw new RuntimeException("Gagal menyimpan file ke direktori \"{$directory}\".");
+        }
+
+        return [
+            'disk' => $disk,
+            'path' => $path,
+            'original_filename' => $filename,
+            'mime_type' => $mimeType,
+            'size' => filesize($absolutePath) ?: 0,
         ];
     }
 

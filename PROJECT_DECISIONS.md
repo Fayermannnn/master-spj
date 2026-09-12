@@ -412,3 +412,105 @@ sendiri.
 "menampilkan contoh placeholder Handlebars-style di UI" tidak
 terulang di fase mendatang (Phase 7 Document Generator kemungkinan
 besar butuh menampilkan hal serupa).
+
+## D-018 — Document Generator: phpword TemplateProcessor, LibreOffice wajib, VariableResolver tertutup, `documents` terpisah dari checklist
+
+**Konteks:** Phase 6 (D-016) sengaja menunda 3 keputusan ke Phase 7:
+library pengisian DOCX, strategi konversi PDF, dan struktur tabel
+`documents`. Ini keputusan arsitektur besar (RULE 10 CLAUDE.md) —
+didiskusikan dengan user di awal Phase 7 lewat `AskUserQuestion`
+sebelum implementasi dimulai.
+
+**Keputusan:**
+
+1. **Library DOCX**: `phpoffice/phpword` (`TemplateProcessor`), sesuai
+   tabel stack di `PROJECT_BLUEPRINT.md` §4. Delimiter diubah dari
+   default `${...}` ke `{{...}}` lewat `setMacroChars('{{', '}}')` agar
+   konsisten dengan `DocxPlaceholderScanner` (Phase 6) dan dengan
+   template yang sudah diunggah user. Table variable berulang (§21)
+   dites LEBIH DULU sebelum keputusan final — terbukti didukung penuh
+   oleh `TemplateProcessor::cloneRowAndSetValues()` (mengisi satu baris
+   tabel berulang dari array 2 dimensi, mengindeks SEMUA placeholder
+   dalam baris itu sekaligus, bukan cuma satu kolom) dan
+   `deleteRow()` untuk kasus nol baris (mis. project tanpa personel
+   ditugaskan) — tidak perlu workaround manual.
+2. **PDF wajib, bukan fallback**: Ditanya eksplisit ke user karena
+   LibreOffice TIDAK terpasang di lingkungan Herd lokal saat itu — user
+   memilih **memasang LibreOffice dulu** (`brew install --cask
+   libreoffice`) alih-alih opsi fallback "DOCX dulu, PDF menyusul".
+   Akibatnya `DocumentGeneratorService::generate()` bersifat ATOMIK:
+   DOCX dibuat di temp file, PDF WAJIB berhasil dikonversi (lewat
+   `PdfConverterInterface` -> `LibreOfficePdfConverter`, menjalankan
+   `soffice --headless --convert-to pdf` via
+   `Illuminate\Support\Facades\Process` — bawaan framework, BUKAN
+   dependency baru) sebelum kedua file dan baris `Document` disimpan;
+   kalau konversi gagal (mis. binary hilang), tidak ada file/baris DB
+   yang tersisa (dibersihkan), exception dibungkus jadi
+   `DomainActionException` dengan pesan yang aman ditampilkan ke user.
+   Binary dikonfigurasi lewat `config('services.libreoffice.binary')`
+   (env `LIBREOFFICE_BINARY`, default `soffice`, resolve via PATH —
+   Homebrew cask menaruh command wrapper di `/opt/homebrew/bin/soffice`
+   yang otomatis ada di PATH setelah instalasi). Diverifikasi end-to-end
+   sungguhan (bukan cuma test dengan fake) lewat browser terhadap
+   `ReferenceProjectSeeder` — generate menghasilkan DOCX + PDF nyata
+   yang bisa diunduh.
+3. **Test TIDAK menjalankan LibreOffice sungguhan**: `PdfConverterInterface`
+   di-bind ke `FakePdfConverter` (didefinisikan di file test) dalam
+   Pest — proses eksternal nyata terlalu lambat/rapuh untuk dijalankan
+   di setiap test run, beda kelas dengan alasan "no SQLite" (D-003,
+   soal paritas skema DB, bukan soal menjalankan binary asli). Produksi
+   tetap SELALU pakai `LibreOfficePdfConverter` nyata (dibind di
+   `AppServiceProvider::register()`).
+4. **`documents` tabel terpisah dari `project_checklist_items`**:
+   Dikonfirmasi user (opsi "documents terpisah + payment_id opsional").
+   Satu baris `documents` = satu HASIL generate (versi bertambah per
+   pasangan project+requirement, unique constraint
+   `[project_id, document_requirement_id, version]`), berisi
+   `data_snapshot` (JSON nilai variable yang dipakai — §61-62, dokumen
+   lama TIDAK berubah walau data project berubah setelahnya karena
+   snapshot dan file sudah final), `document_template_id` (versi
+   template yang dipakai, `restrictOnDelete` — histori generate tidak
+   boleh kehilangan jejak provenance-nya), `payment_id` NULLABLE
+   (konteks termin opsional untuk variable `payment.*`).
+   `DocumentGeneratorService::generate()` otomatis meng-update
+   `ProjectChecklistItem` terkait jadi `Fulfilled` lewat
+   `ChecklistService::updateStatus()` yang sudah ada (bukan menulis
+   langsung ke kolom status) — wiring yang sejak Phase 5 memang
+   didokumentasikan sebagai pekerjaan Phase 7 (lihat docblock
+   `ChecklistStatus`).
+5. **`VariableResolver` — kosakata TERTUTUP**, pola yang identik dengan
+   `RequirementRuleEvaluator` (D-15): `match()` atas key yang dikenal
+   (`project.*`, `client.*`, `ppk.name`, `provider.*` = organisasi
+   pemilik project sesuai D-008, `payment.*`, `today`), BUKAN dot-path
+   bebas lewat reflection. Variable baru yang ditambah admin lewat UI
+   `TemplateVariable` (mis. field kustom) TETAP BISA dipakai saat
+   generate — setiap placeholder yang terdeteksi di template selalu
+   dapat kotak input teks yang bisa diisi manual di form generate —
+   tapi AUTO-RESOLVE (prefill otomatis dari data Project/Payment) baru
+   aktif setelah ditambahkan satu cabang `match` baru di
+   `VariableResolver::resolveScalar()`. Ini sengaja: fungsionalitas inti
+   (isi & generate) tidak pernah terkunci menunggu deploy kode, hanya
+   KENYAMANAN auto-fill yang butuh perubahan kode — lebih baik dari
+   pola D-15 murni karena form tidak pernah "gagal" untuk variable yang
+   belum dikenal kode.
+6. **Tidak ada permission baru** — generate/hapus dokumen digerbangi
+   `ProjectPolicy::update` yang sama dengan Payment/CostItem/Checklist
+   (D-014), bukan permission `documents.generate` baru. Alasan sama
+   dengan D-014: dokumen adalah sub-resource project, bukan master data
+   independen.
+7. **Bug Livewire ditemukan SEBELUM ditulis ke test** (lewat tinjauan
+   manual, bukan test gagal seperti D-017): `wire:model` Livewire
+   mengartikan SETIAP titik pada path sebagai array bersarang
+   (`data_get`/`data_set`). Placeholder seperti `project.name`
+   mengandung titik LITERAL sebagai bagian dari nama key array PHP
+   (`$variableInputs['project.name']`), sehingga
+   `wire:model="variableInputs.project.name"` akan salah diartikan
+   Livewire sebagai `$variableInputs['project']['name']`. Diperbaiki
+   dengan menyimpan `$variableInputs` sebagai LIST terindeks angka
+   (sejajar urutan dengan `tablelessDetectedKeys()`), `wire:model`
+   memakai indeks (`variableInputs.0`, dst — indeks murni angka, tidak
+   ambigu), key placeholder aslinya di-`array_combine` kembali saat
+   submit ke `DocumentGeneratorService::generate()`. Pola ini akan
+   terulang untuk fitur Livewire manapun yang mem-bind array dengan key
+   berisi titik — jangan pakai key string apa adanya di `wire:model`
+   untuk kasus itu.
