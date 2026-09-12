@@ -5,155 +5,140 @@ lanjut tanpa kehilangan konteks.
 
 ## Current Phase
 
-**Phase 10 — QA: SELESAI.** Ini adalah fase TERAKHIR dari 10 fase roadmap
-awal (`PROJECT_BLUEPRINT.md` §9) — **MVP Sistem SPJ Otomatis dianggap
-LENGKAP** dari Foundation (Phase 1) sampai QA (Phase 10). Tidak ada fase
-fitur baru yang direncanakan setelah ini di roadmap awal; sesi berikutnya
-kemungkinan besar akan berupa permintaan fitur BARU di luar roadmap awal,
-atau perbaikan/perluasan dari backlog yang tercatat di bawah.
+**Roadmap 10-fase awal SELESAI (Phase 1-10).** Fase tambahan pertama di
+luar roadmap: **Notification — SELESAI.** Repo di-push ke GitHub
+(`https://github.com/Fayermannnn/master-spj`, Public — dikonfirmasi user).
 
 ## Completed Features
 
-### Phase 1-9 (ringkas — detail di git log / PROJECT_DECISIONS.md)
+### Phase 1-10 (ringkas — detail di git log / PROJECT_DECISIONS.md D-001 s/d D-021)
 Auth, RBAC, Organization, User Management, ProjectType, Client+Contact,
 Project (status siklus), Contract, PersonnelCategory, Personnel (+
 dokumen), PersonnelAssignment, TaxType, CostCategory, CostItem, Payment,
 DocumentRequirement + RequirementRule + RequirementRuleEvaluator +
 ProjectChecklistItem, TemplateVariable + DocumentTemplate +
-DocxPlaceholderScanner, VariableResolver + DocumentGeneratorService
-(generate DOCX+PDF via phpword + LibreOffice), Evidence + SpjPackage/
-SpjItem (manifest + export ZIP), Workplan (Milestone/Deliverable +
-timeline Gantt-lite) + Reporting (Laporan Ringkasan Project + unduh
-Excel/PDF), Dashboard dengan widget agregat nyata.
+DocxPlaceholderScanner, VariableResolver + DocumentGeneratorService,
+Evidence + SpjPackage/SpjItem, Workplan (Milestone/Deliverable) +
+Reporting (Laporan Ringkasan Project), Dashboard, dan Phase 10 QA
+(security/performance/test/UX hardening menyeluruh — lihat D-021).
 
-### Phase 10 (baru) — QA menyeluruh
+### Notification (baru, di luar roadmap awal) — D-022
 
-**Metodologi**: skill `security-review` bawaan TIDAK bisa dipakai (butuh
-`git diff origin/HEAD`, repo ini tidak punya remote). Dilakukan manual
-lewat 3 subagent riset paralel (security/performance/test-coverage) +
-tinjauan UX langsung oleh sesi ini via browser (viewport mobile 375px).
-Semua temuan diverifikasi lewat `composer ci` dan/atau browser sungguhan
-sebelum dianggap selesai — bukan cuma dibaca dari laporan agent.
+- **`app/Domain/Notification/Services/NotificationService.php`** —
+  menghitung alert LIVE (bukan menyimpan isi notifikasi) dari 4 sumber:
+  - Sertifikat Personnel akan kadaluarsa (≤30 hari) atau sudah lewat
+    (`certificate_expiry_date`), di-scope per organisasi personel
+    langsung (tidak bergantung status project).
+  - Milestone terlambat (`target_date` lewat, status bukan Completed),
+    hanya untuk project berstatus Preparation/Active/PaymentProcessing.
+  - Payment/termin terlambat (`target_date` lewat, status bukan
+    Paid/Rejected), scope project sama seperti milestone.
+  - Checklist belum lengkap — SATU alert PER PROJECT (agregat jumlah
+    item Missing, bukan satu per item), hanya project Active/
+    PaymentProcessing. **Sengaja TIDAK memanggil `ChecklistService::sync()`**
+    di jalur ini (method ini jalan di SETIAP request lewat bell
+    global — memanggil sync() di sana akan mengulang masalah performa
+    D-021 tapi jauh lebih parah, di semua halaman bukan cuma Laporan).
+    Konsekuensi: project yang checklist-nya belum pernah dibuka sama
+    sekali tidak akan muncul sampai seseorang membuka tab Checklist-nya
+    minimal sekali.
+- **`NotificationDismissal`** (model+migration) — satu-satunya yang
+  dipersist: penanda "sudah ditutup" per user per `dismissal_key`
+  string (mis. `"milestone:{id}"`), BUKAN foreign key relasional ke
+  4 jenis sumber berbeda.
+- **Bell notifikasi global** (`app/Livewire/Notifications/Bell.php`,
+  dirender di `layouts/app.blade.php` pada SETIAP halaman) — badge
+  jumlah alert, dropdown Alpine.js daftar alert dengan link ke halaman
+  terkait dan tombol dismiss per item.
+- **Cache 5 menit per user** (`Cache::remember`, driver `database`) —
+  supaya bell yang jalan di setiap halaman tidak N+1 di setiap request.
+  `dismiss()` memanggil `Cache::forget()` supaya penutupan terasa
+  instan.
+- **Bug nyata ditemukan lewat reload browser (BUKAN test otomatis)**:
+  percobaan pertama meng-cache objek `Collection` PHP yang isinya
+  instance enum `NotificationType` LANGSUNG — reload KEDUA (setelah
+  cache tersimpan) menghasilkan 500
+  `"tried to call a method on an incomplete object... Collection...
+  was loaded before unserialize()"`. Cache driver `database`
+  men-serialize lewat `serialize()` PHP native — objek di dalamnya
+  rapuh terhadap pergeseran bentuk class antar iterasi kode. Diperbaiki:
+  cache ARRAY MENTAH (`->all()`) dengan `type` sebagai string `->value`,
+  bukan Collection+enum. **PELAJARAN PENTING untuk fitur mendatang**:
+  JANGAN PERNAH `Cache::remember()` sebuah Collection/objek/enum secara
+  langsung — selalu ubah ke array/scalar murni dulu, berlaku untuk
+  SEMUA cache driver (bukan cuma `database`), karena akar masalahnya
+  adalah fragilitas `serialize()`/`unserialize()` PHP native terhadap
+  perubahan bentuk class, bukan sesuatu yang spesifik ke satu driver.
+- Tidak ada permission baru — scoping organisasi dilakukan di dalam
+  `NotificationService` sendiri (pola sama Dashboard/Reports).
+- 7 test baru (130 total) — `tests/Feature/Notifications/NotificationServiceTest.php`:
+  4 jenis alert masing-masing, agregasi checklist per project, scoping
+  organisasi (super_admin vs organisasi sendiri), dismiss langsung
+  menyembunyikan alert meski masih dalam window cache, dismiss lewat
+  komponen Bell. Diverifikasi juga end-to-end di browser (termasuk
+  reload berkali-kali setelah perbaikan bug cache, untuk memastikan
+  tidak berulang).
 
-**Perbaikan security (2):**
-- Evidence upload TIDAK punya validasi `mimes:` sama sekali (beda dari
-  DocumentTemplate/Personnel yang sudah benar) — ditambahkan
-  `mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx`.
-- Hash password & `remember_token` User BOCOR ke `audit_logs` (append-
-  only, bisa dibaca admin manapun) via `UserService::create/update/delete`
-  yang mengirim `getAttributes()`/`getChanges()` mentah — ditambahkan
-  `UserService::redact()`.
+## Repository
 
-**Perbaikan performance (2 diperbaiki, 1 sengaja TIDAK):**
-- N+1 nyata di tab "Dokumen" (`GeneratedDocuments\Manager`, ~30-45
-  query tambahan per render) — diperbaiki via cache per-render
-  (property PRIVATE, bukan state Livewire).
-- `Reports\ProjectSummary` tidak dipaginasi (satu-satunya listing di
-  app ini yang begitu) — diperbaiki: tabel dipaginasi 15/halaman,
-  kartu total tetap akurat lewat `ProjectSummaryReportService::aggregates()`
-  (SQL `sum()` langsung, terpisah dari `toRow()`/`sync()` yang mahal).
-  Ekspor Excel/PDF TETAP tidak dipaginasi (sengaja — unduhan harus
-  berisi semua baris yang cocok filter).
-- `ChecklistService::sync()` mahal (~16 query/call untuk project
-  dengan banyak requirement/rule) — **SENGAJA TIDAK diperbaiki**.
-  Optimasi memoization SEMPAT dicoba di `RequirementRuleEvaluator`,
-  lalu DIBATALKAN karena `tests/Unit/DocumentRequirement/RequirementRuleEvaluatorTest.php`
-  membuktikan itu bug korektnes nyata (cache basi kalau data project
-  berubah lalu dievaluasi ulang dalam request yang sama — pola sah
-  yang test-nya sengaja menguji). Lihat `PROJECT_DECISIONS.md` D-021
-  poin 5 untuk arah perbaikan yang BENAR kalau ini terbukti jadi
-  bottleneck sungguhan di masa depan (cache di level batch
-  `applicableRequirements()`, bukan di evaluator).
+Di-push ke GitHub: `https://github.com/Fayermannnn/master-spj`
+(**Public** — dikonfirmasi eksplisit oleh user, bukan default yang
+disarankan). Branch `main` + semua tag `phase0-complete` s/d
+`phase10-complete`. Remote `origin` sudah dikonfigurasi di repo lokal;
+push berikutnya tinggal `git push` / `git push --tags` seperti biasa.
 
-**Perbaikan UX (1, tapi berdampak luas):**
-- Bug overflow horizontal di SELURUH halaman pada mobile — BUKAN di
-  tab nav (dugaan awal salah), tapi classic flexbox `min-width:auto`
-  trap: `<main>` adalah `flex-1` child dari container `flex-col` di
-  `layouts/app.blade.php`. Judul project yang panjang di header sticky
-  memaksa seluruh halaman melebar. Diperbaiki: `min-w-0` di `<main>`
-  dan div flex-col pembungkusnya, `truncate`+`min-w-0` di `<h1>` judul.
-  **PENTING untuk sesi berikutnya**: `.claude/launch.json` HANYA
-  menjalankan `php artisan serve`, TIDAK ADA proses Vite dev yang
-  watch — setiap perubahan class Tailwind butuh `npm run build` manual
-  sebelum terlihat di browser (perubahan PHP/Blade logic biasa
-  langsung ter-refresh, tapi CSS TIDAK).
+## Known Issues / Deferred
 
-**Perbaikan & penambahan test (13 test baru, 123 total):**
-- Domain `Contract` (sejak Phase 2) TIDAK PUNYA test sama sekali —
-  ditulis `tests/Feature/Contracts/ContractManagementTest.php` dari
-  nol. Saat menulis test PERTAMA untuk domain ini, ditemukan BUG
-  PRODUKSI NYATA: `Contracts\Form::save()` hanya mengonversi
-  `tax_type_id` dari string kosong ke `null`, field opsional lain
-  (spmk_number/spmk_date/tax_amount/net_value/notes) TIDAK — kalau
-  user submit form kontrak dengan field itu kosong, `ContractService::save()`
-  crash 500 di level database Postgres. Diperbaiki di `Form::save()`.
-- Cross-organization authorization untuk Payment/CostItem/
-  PersonnelAssignment (D-014: sengaja tanpa Policy sendiri, digerbangi
-  `ProjectPolicy::update`) TIDAK PERNAH diverifikasi lewat aktor
-  hostile-org sejak fase-fase itu ditulis — ditambahkan test untuk
-  ketiganya, SEMUA lolos (klaim D-014 terbukti benar, tapi sebelumnya
-  memang belum dibuktikan).
-- `ClientPolicy` — satu-satunya Policy tanpa test jalur "ditolak" —
-  ditambahkan.
-- Evidence — ditambahkan test tolak tipe file salah, tolak ukuran
-  lebih besar dari limit, dan 404 saat mengunduh file yang sudah
-  dihapus.
-- User — ditambahkan test yang memverifikasi hash password TIDAK
-  PERNAH muncul di `audit_logs` (memverifikasi perbaikan security di
-  atas).
+Lihat bagian yang sama di riwayat git `PROJECT_HANDOVER.md` sebelum
+fase Notification (Phase 10 QA) untuk backlog QA yang belum dikerjakan
+(test transisi status enum lain, test file hilang pasca soft-delete,
+dst — semuanya masih berlaku, belum dikerjakan di fase Notification
+ini).
 
-## Known Issues / Deferred (dicatat sengaja, backlog QA lanjutan — BUKAN untuk dikerjakan otomatis di sesi berikutnya kecuali diminta)
-
-- Enum status lain (`ChecklistStatus`/`SpjPackageStatus`/`TemplateStatus`/
-  `WorkplanStatus`) belum diuji jalur transisi tidak-valid (hanya
-  `ProjectStatus`/`PaymentStatus` yang sudah, dari fase sebelumnya).
-- Beberapa service (`VariableResolver`, `EvidenceService`, dst) hanya
-  teruji TIDAK LANGSUNG lewat komponen Livewire-nya — dianggap cukup,
-  bukan celah, tapi dicatat untuk transparansi.
-- File generate/export (`GeneratedDocuments`/`SpjPackages`/`Reports`)
-  belum diuji untuk kasus file sumber hilang dari disk pasca
-  soft-delete (edge case jarang terjadi, bukan alur normal).
-- `ChecklistService::sync()` tetap O(requirement × rule) per panggilan
-  — lihat perbaikan performance di atas untuk arah yang benar kalau
-  perlu dioptimasi nanti.
+Tambahan dari fase Notification:
+- Alert checklist tidak akan muncul untuk project yang checklist-nya
+  belum pernah disinkronkan sama sekali (lihat penjelasan di atas) —
+  pembatasan yang disengaja demi performa, bukan bug.
+- Belum ada channel notifikasi selain in-app (tidak ada email/push) —
+  sesuai deskripsi domain asli ("Notifikasi in-app"), bukan kekurangan.
+- Domain `Settings` dan `Workflow` (dari 19 domain awal) masih belum
+  diimplementasikan — tidak ada kebutuhan konkret yang mendorongnya
+  sejauh ini (lihat alasan pemilihan Notification di D-022).
 
 ## Environment
 
-Tidak ada dependency baru di Phase 10. **Catatan penting**: jalankan
-`npm run build` setelah mengubah class Tailwind di file Blade manapun
-sebelum memverifikasi di browser — `.claude/launch.json` tidak
-menjalankan Vite dev server yang watch.
+Dependency baru: tidak ada (Notification tidak menambah composer
+package). **Catatan yang masih berlaku dari Phase 10**: jalankan
+`npm run build` setelah mengubah class Tailwind di Blade manapun —
+`.claude/launch.json` tidak menjalankan Vite dev server yang watch.
 
 ## Next Task
 
-**Roadmap 10-fase awal SELESAI.** Tidak ada Phase 11 yang direncanakan.
-Sesi berikutnya kemungkinan besar:
-1. Permintaan fitur baru dari user yang di luar roadmap awal — perlakukan
-   sebagai fase baru, ikuti pola yang sama (baca blueprint/decisions dulu,
-   AskUserQuestion untuk ambiguitas arsitektur besar, verifikasi
-   end-to-end sungguhan, dokumentasikan keputusan).
-2. Mengerjakan backlog "Known Issues/Deferred" di atas kalau diminta.
-3. Deployment/production readiness (belum pernah dibahas eksplisit di
-   roadmap awal — kalau muncul, ini keputusan arsitektur besar baru,
-   ikuti RULE 10).
+Tidak ada fase terjadwal berikutnya. Kemungkinan arah:
+1. Fitur baru lain dari 19 domain yang belum terisi (`Settings`,
+   `Workflow`) — HANYA kalau ada kebutuhan konkret, jangan
+   diimplementasikan tanpa alasan jelas (lihat RULE 9 CLAUDE.md).
+2. Backlog QA Phase 10 (lihat Known Issues di atas).
+3. Permintaan fitur baru dari user.
+4. Production/deployment readiness — belum pernah dibahas, kalau
+   diminta ini keputusan arsitektur besar baru (RULE 10).
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 123
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 130
 test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-021). Baru di Phase 10: D-021
-(audit menyeluruh, 2 perbaikan security, 2 perbaikan + 1 pembatalan
-optimasi performance, 1 perbaikan UX berdampak luas + catatan build
-Tailwind, 1 bug produksi nyata ditemukan lewat test Contract, cross-org
-authorization diverifikasi untuk domain D-014).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-022). Baru: D-022 (domain
+Notification baru, alert dihitung live tanpa tabel/scheduler, cache
+5 menit untuk bell global, bug cache Collection+enum ditemukan &
+diperbaiki — pelajaran berlaku untuk semua fitur mendatang yang
+memakai `Cache::remember()`).
 
 ## Security Notes
 
-Lihat perbaikan security Phase 10 di atas (mimes Evidence, redaksi
-password di audit log). Selebihnya tidak berubah dari Phase 1-9. Audit
-security menyeluruh Phase 10 TIDAK menemukan celah kritis (path
-traversal/SQL injection/XSS/command injection/IDOR/mass assignment
-semua "No issue found").
+Tidak berubah dari Phase 10. Notification tidak menambah permukaan
+serangan baru — bell hanya membaca data yang sudah di-scope organisasi
+di service-nya sendiri, `NotificationDismissal` hanya berisi string
+key + user_id (tidak ada data sensitif).

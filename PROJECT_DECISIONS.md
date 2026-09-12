@@ -826,3 +826,88 @@ temuan security KRITIS (tidak ada path traversal/SQLi/XSS/command
 injection/IDOR/mass-assignment nyata — semua kategori itu "No issue
 found" di audit) — dua temuan yang ada (MIME Evidence, password di
 audit log) bersifat hardening, sudah diperbaiki.
+
+## D-022 — Notification: domain baru, alert dihitung live (bukan disimpan), cache HARUS array mentah bukan objek
+
+**Konteks:** Roadmap 10 fase awal sudah selesai (D-021). User diminta
+lanjut ke "fitur baru yang menurut saya perlu" — dari 19 domain awal
+(D-005), tiga TIDAK PERNAH diimplementasikan sama sekali: `Notification`,
+`Settings`, `Workflow`. Dipilih `Notification` karena: (1) sudah
+punya deskripsi domain eksplisit sejak Phase 0 ("Notifikasi in-app:
+deadline, dokumen kurang, expired, revisi"), (2) datanya SUDAH ADA
+lintas 6 fase (Personnel.certificate_expiry_date, Milestone.target_date,
+Payment.target_date, ProjectChecklistItem.status) — tidak perlu
+modeling baru yang besar, (3) `Workflow` (state machine generik)
+berisiko redundan dengan status enum yang sudah ada di tiap domain
+(ProjectStatus/PaymentStatus/TemplateStatus/SpjPackageStatus/
+WorkplanStatus) tanpa gap nyata yang butuh diisi, (4) `Settings` masih
+terlalu kabur tanpa kebutuhan konkret.
+
+**Keputusan:**
+
+1. **Alert dihitung LIVE, TIDAK ADA tabel `notifications` yang
+   menyimpan isi** — `NotificationService::pending()` query langsung ke
+   Personnel/Milestone/Payment/ProjectChecklistItem setiap dipanggil.
+   Konsisten dengan pola yang SUDAH ADA di app ini (Dashboard widget,
+   SpjPackage coverage) — isi alert tidak pernah basi karena selalu
+   dihitung ulang dari data terkini, dan TIDAK BUTUH scheduler/queue
+   sama sekali (`php artisan schedule:run` tidak pernah di-setup di
+   app ini) untuk "membuat" notifikasi (RULE 67).
+2. **Hanya `NotificationDismissal` yang dipersist** — satu tabel kecil
+   (user_id, dismissal_key, dismissed_at) menandai satu alert sebagai
+   "sudah ditutup" oleh satu user, dikunci dengan `dismissal_key`
+   string deterministik (mis. `"milestone:{id}"`, bukan foreign key
+   relasional ke 4 jenis sumber yang berbeda — menghindari 4 kolom FK
+   nullable yang kebanyakan akan NULL, sekaligus tetap konsisten
+   dengan prinsip "tanpa polymorphic relation" (D-019) karena ini
+   BUKAN relasi ke satu record, hanya string penanda).
+3. **Satu alert PER PROJECT untuk checklist tidak lengkap** (agregat
+   jumlah item Missing), bukan satu per item — supaya bell tidak
+   banjir untuk project dengan banyak requirement. SENGAJA TIDAK
+   memanggil `ChecklistService::sync()` di jalur ini (lihat poin 5).
+4. **Cakupan alert dibatasi ke project "berjalan"** (Preparation/
+   Active/PaymentProcessing) untuk milestone/payment/checklist — Draft/
+   Completed/Closed/Archived tidak menghasilkan notifikasi (project
+   yang belum/sudah tidak berjalan wajar kalau datanya "belum lengkap"
+   atau "terlambat", bukan sesuatu yang perlu ditindaklanjuti).
+   Sertifikat personel TIDAK dibatasi oleh status project (discoped by
+   `organization_id` personel langsung) — kadaluarsa sertifikat relevan
+   terlepas dari project mana pun sedang berjalan.
+5. **Bell notifikasi global (dirender di `layouts/app.blade.php`,
+   SETIAP halaman) di-cache 5 menit per user** (`Cache::remember`,
+   driver `database` yang sudah dikonfigurasi) — TANPA cache, method
+   ini akan mengulang masalah N+1 yang baru diperbaiki di Phase 10
+   (D-021) tapi pada SETIAP request di SELURUH app, bukan cuma satu
+   halaman Laporan. `dismiss()` memanggil `Cache::forget()` supaya
+   penutupan terasa instan tanpa menunggu TTL habis.
+6. **Bug nyata ditemukan lewat verifikasi browser (reload halaman),
+   BUKAN test otomatis** — percobaan pertama meng-cache `Collection`
+   PHP yang isinya array berisi instance enum `NotificationType`
+   secara LANGSUNG. Reload kedua (setelah cache tersimpan) menghasilkan
+   500: `"tried to call a method on an incomplete object... Collection
+   ... was loaded before unserialize()"`. Cache driver `database`
+   men-serialize nilai lewat `serialize()` PHP native — menyimpan
+   OBJEK (Collection, Enum) di dalamnya rapuh terhadap pergeseran
+   bentuk class antar iterasi kode (properti/struktur berubah = baris
+   cache lama gagal di-unserialize). Diperbaiki: `pending()` meng-cache
+   ARRAY MENTAH (`->all()`, bukan objek Collection), dan field `type`
+   disimpan sebagai `$enum->value` (string), bukan instance enum —
+   dibungkus balik jadi `collect()` setelah dibaca dari cache. **Pelajaran
+   untuk fitur mendatang yang memakai `Cache::remember()`: JANGAN
+   PERNAH cache Collection/objek/enum secara langsung — selalu ubah ke
+   array/scalar murni dulu sebelum di-cache**, apa pun cache driver-nya
+   (bukan cuma `database`) karena root cause-nya (fragilitas
+   serialize/unserialize PHP native terhadap perubahan bentuk class)
+   berlaku ke semua driver yang tidak eksplisit pakai JSON.
+7. **Tidak ada permission baru** — bell tidak butuh `authorize()`
+   eksplisit (setiap user yang login berhak melihat notifikasinya
+   sendiri); scoping organisasi dilakukan di dalam `NotificationService`
+   sendiri (pola sama Dashboard/Reports: `hasRole('super_admin')` lihat
+   semua, selainnya di-filter `organization_id`).
+
+**Hasil:** 130 test (7 baru), `composer ci` bersih. Diverifikasi
+end-to-end sungguhan di browser: bell menampilkan 4 alert nyata
+(sertifikat, milestone, termin, checklist) dari data seed, dismiss
+langsung mengurangi badge TANPA reload, dan (setelah perbaikan poin 6)
+alert yang di-dismiss TETAP tersembunyi setelah reload halaman berkali-
+kali berturut-turut.

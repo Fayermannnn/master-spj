@@ -141,6 +141,8 @@
 
                     <div class="flex shrink-0 items-center gap-3">
                         @auth
+                            <livewire:notifications.bell />
+
                             <div class="hidden text-right sm:block">
                                 <p class="text-sm font-medium text-slate-900">{{ auth()->user()->name }}</p>
                                 <p class="text-xs text-slate-500">

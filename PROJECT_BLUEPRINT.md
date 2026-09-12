@@ -277,3 +277,23 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
 
 **Dengan ini seluruh 10 fase roadmap awal (§9) SELESAI — MVP Sistem SPJ
 Otomatis lengkap dari Foundation sampai QA.**
+
+## Fase Tambahan (di luar roadmap 10-fase awal)
+
+- **Notification — SELESAI.** Domain `Notification` (salah satu dari 19
+  domain awal §5 yang belum pernah diisi) diimplementasikan atas
+  permintaan terbuka user ("fitur baru yang menurut saya perlu").
+  `NotificationService` menghitung alert LIVE (sertifikat personel
+  akan/sudah kadaluarsa, milestone terlambat, termin terlambat,
+  checklist belum lengkap) dari data yang sudah ada lintas 6 fase —
+  TIDAK ADA tabel isi notifikasi, TIDAK ADA scheduler/queue. Bell
+  notifikasi global di setiap halaman, dismiss dipersist per user lewat
+  `NotificationDismissal`. Bug nyata ditemukan lewat reload browser
+  (BUKAN test): meng-cache objek `Collection`+enum PHP langsung lewat
+  `Cache::remember()` rapuh terhadap serialize/unserialize native PHP
+  (500 "incomplete object" pada reload kedua) — diperbaiki dengan
+  meng-cache array mentah + enum sebagai string, pelajaran yang berlaku
+  untuk semua fitur mendatang yang memakai `Cache::remember()`. 130 test
+  hijau (7 baru), `composer ci` lulus, diverifikasi sungguhan di browser
+  (termasuk reload berkali-kali setelah perbaikan). Detail:
+  `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-022.
