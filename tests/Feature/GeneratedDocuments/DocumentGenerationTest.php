@@ -12,6 +12,8 @@ use App\Domain\Organization\Services\OrganizationService;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Livewire\GeneratedDocuments\Manager;
 use App\Models\Contract;
+use App\Models\CostCategory;
+use App\Models\CostItem;
 use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
@@ -103,6 +105,43 @@ function logoPlaceholderDocxBytes(): string
         .'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
         .'<w:p><w:r><w:t>{{organization.logo}}</w:t></w:r></w:p>'
         .'<w:p><w:r><w:t>Project: {{project.name}}</w:t></w:r></w:p>'
+        .'</w:body></w:document>';
+    $settingsXml = '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:settings>';
+
+    $zip = new ZipArchive;
+    $zip->open($path, ZipArchive::CREATE);
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
+    $zip->addFromString('word/document.xml', $documentXml);
+    $zip->addFromString('word/settings.xml', $settingsXml);
+    $zip->close();
+
+    $bytes = file_get_contents($path);
+    @unlink($path);
+
+    return $bytes;
+}
+
+/**
+ * Docx terpisah dengan tabel `cost_items` (rincian item biaya untuk
+ * Invoice) — TIDAK ditambahkan ke `generatorTemplateDocxBytes()`
+ * supaya test lain yang tidak mendaftarkan `cost_item.*` tidak ikut
+ * memicu `resolveApplicableTables()` mencoba meng-clone baris yang
+ * tidak ada di template mereka.
+ */
+function invoiceTemplateDocxBytes(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'docx_invoice_').'.docx';
+
+    $documentXml = '<?xml version="1.0"?>'
+        .'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+        .'<w:p><w:r><w:t>Invoice: {{project.name}}</w:t></w:r></w:p>'
+        .'<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>'
+        .'<w:tr>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{cost_item.description}}</w:t></w:r></w:p></w:tc>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{cost_item.quantity}} {{cost_item.unit}}</w:t></w:r></w:p></w:tc>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{cost_item.total}}</w:t></w:r></w:p></w:tc>'
+        .'</w:tr>'
+        .'</w:tbl>'
         .'</w:body></w:document>';
     $settingsXml = '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:settings>';
 
@@ -502,4 +541,62 @@ it('does not render document.number as an editable input in the generate form', 
     $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
 
     expect($keys)->not->toContain('document.number');
+});
+
+it('fills a cost_items table row per project cost item for an invoice template', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    Storage::disk($template->disk)->put($template->path, invoiceTemplateDocxBytes());
+    $template->update(['detected_variables' => [
+        'project.name', 'cost_item.description', 'cost_item.quantity', 'cost_item.unit', 'cost_item.total',
+    ]]);
+
+    $category = CostCategory::factory()->create();
+    CostItem::factory()->create([
+        'project_id' => $project->id,
+        'cost_category_id' => $category->id,
+        'description' => 'Sewa Kendaraan Survey',
+        'quantity' => 2,
+        'unit' => 'Unit',
+        'unit_price' => 500_000,
+        'subtotal' => 1_000_000,
+        'tax_amount' => 0,
+        'total' => 1_000_000,
+    ]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => $project->name],
+        null,
+        null,
+    );
+
+    $text = extractDocxText($document->disk, $document->path);
+    expect($text)
+        ->toContain('Sewa Kendaraan Survey')
+        ->toContain('2 Unit')
+        ->toContain('Rp 1.000.000')
+        ->not->toContain('{{')
+        ->not->toContain('}}');
+});
+
+it('deletes an empty cost_items table row when the project has no cost items', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    Storage::disk($template->disk)->put($template->path, invoiceTemplateDocxBytes());
+    $template->update(['detected_variables' => [
+        'project.name', 'cost_item.description', 'cost_item.quantity', 'cost_item.unit', 'cost_item.total',
+    ]]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => $project->name],
+        null,
+        null,
+    );
+
+    $text = extractDocxText($document->disk, $document->path);
+    expect($text)->not->toContain('cost_item.');
 });

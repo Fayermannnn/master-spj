@@ -1506,3 +1506,41 @@ generik Phase 5-7 memang dirancang untuk kasus seperti ini (RULE 1).
 **Hasil:** 210 test (8 baru — 7 kasus terbilang mencakup nol/belasan/
 puluhan/ratusan/ribuan/jutaan-miliaran/pembulatan desimal, 1 alur
 Livewire payment.* auto-fill), `composer ci` bersih.
+
+## D-032 — Kelengkapan Invoice: grup tabel `cost_items`
+
+**Konteks:** Fitur ketiga dari batch surat administratif. `INVOICE`
+sudah terdaftar sebagai `DocumentRequirement` sejak awal, tapi hanya
+punya `payment.amount` (satu angka, tidak rinci) — invoice sungguhan
+butuh rincian item (uraian, kuantitas, satuan, harga satuan, total per
+baris), bukan cuma nominal total.
+
+**Keputusan:**
+
+1. **Grup tabel BARU `cost_items`** di `VariableResolver::tableGroups()` —
+   pola SAMA PERSIS dengan grup `personnel` yang sudah ada (satu baris
+   docx diulang per `CostItem` project, lewat mekanisme
+   `cloneRowAndSetValues()`/`deleteRow()` yang sudah ada sejak D-018,
+   TIDAK ADA perubahan ke `DocumentGeneratorService::resolveApplicableTables()`
+   sama sekali — murni tambahan data variable).
+2. **`document.number`/`payment.amount_terbilang` yang sudah ada
+   (D-029/D-031) otomatis berlaku untuk Invoice juga** — tidak perlu
+   variable "invoice-khusus" terpisah, karena arsitekturnya memang
+   BUKAN if-per-jenis-dokumen: nomor invoice = `document.number`
+   (skema penomoran yang sama untuk semua dokumen organisasi, sesuai
+   keputusan D-029 satu skema per organisasi), nominal terbilang =
+   `payment.amount_terbilang` yang sama dipakai SPP.
+3. **`CostItem` yang tidak match `tax_type_id`** (tidak kena pajak,
+   `tax_amount = 0`) tetap tampil sebagai baris normal (bukan
+   dilewati) — `cost_item.tax_amount` menampilkan "Rp 0", bukan
+   dikosongkan, supaya kolom pajak di invoice tetap konsisten
+   terisi/berjajar rapi untuk SEMUA baris.
+
+**Verifikasi:** 2 test baru — satu memverifikasi baris tabel benar-benar
+terisi dari `CostItem` project (deskripsi, kuantitas+satuan, total
+dalam format Rupiah, tidak ada `{{`/`}}` tersisa di dokumen jadi), satu
+lagi memverifikasi baris dihapus bersih (`deleteRow()`) kalau project
+tidak punya item biaya sama sekali — bukan meninggalkan baris kosong
+atau placeholder mentah.
+
+**Hasil:** 212 test (2 baru), `composer ci` bersih.

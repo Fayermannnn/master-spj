@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\DocumentGenerator\Services;
 
+use App\Models\CostItem;
 use App\Models\Deliverable;
 use App\Models\Payment;
 use App\Models\PersonnelAssignment;
@@ -70,6 +71,10 @@ class VariableResolver
     {
         return [
             'personnel' => ['personnel.name', 'personnel.position', 'personnel.npwp'],
+            'cost_items' => [
+                'cost_item.description', 'cost_item.quantity', 'cost_item.unit',
+                'cost_item.unit_price', 'cost_item.subtotal', 'cost_item.tax_amount', 'cost_item.total',
+            ],
         ];
     }
 
@@ -110,6 +115,9 @@ class VariableResolver
             'personnel' => array_values($project->personnelAssignments->map(
                 $this->personnelRow(...),
             )->all()),
+            'cost_items' => array_values($project->costItems->map(
+                $this->costItemRow(...),
+            )->all()),
             default => [],
         };
     }
@@ -127,6 +135,22 @@ class VariableResolver
                 ?? ($personnel !== null ? $personnel->position : null)
                 ?? '-',
             'personnel.npwp' => ($personnel !== null ? $personnel->npwp : null) ?? '-',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function costItemRow(CostItem $item): array
+    {
+        return [
+            'cost_item.description' => $item->description,
+            'cost_item.quantity' => rtrim(rtrim((string) $item->quantity, '0'), '.'),
+            'cost_item.unit' => $item->unit,
+            'cost_item.unit_price' => $this->formatCurrency($item->unit_price) ?? '-',
+            'cost_item.subtotal' => $this->formatCurrency($item->subtotal) ?? '-',
+            'cost_item.tax_amount' => $this->formatCurrency($item->tax_amount) ?? '-',
+            'cost_item.total' => $this->formatCurrency($item->total) ?? '-',
         ];
     }
 
