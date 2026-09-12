@@ -1590,3 +1590,48 @@ D-031), dan filter dropdown benar-benar mengecualikan item biaya
 non-personil.
 
 **Hasil:** 216 test (4 baru), `composer ci` bersih.
+
+## D-034 — Surat Perjalanan Dinas (SPPD): domain `TravelAssignment` baru
+
+**Konteks:** Fitur kelima dari batch surat administratif — satu-satunya
+di batch ini yang BUTUH entitas benar-benar baru dari nol (bukan
+sekadar variable dari data yang sudah ada seperti SPP/Invoice/Slip
+Gaji), karena tidak ada tempat manapun di sistem yang menyimpan tujuan
+kota + tanggal berangkat/pulang untuk satu perjalanan personil.
+
+**Keputusan:**
+
+1. **`TravelAssignment` ditempatkan di domain `Personnel` yang sudah
+   ada** (`app/Domain/Personnel/Services/TravelAssignmentService.php`),
+   BUKAN domain baru — satu entitas kecil terkait personil tidak
+   sepadan dengan domain folder terpisah (RULE 67, hindari domain
+   sprawl). Beda dari fitur SPJ Review (D-028) yang memang perlu
+   permission BARU sehingga masuk akal jadi Policy tersendiri.
+2. **Link langsung ke `project_id` + `personnel_id`** — BUKAN ke
+   `personnel_assignment_id` — supaya perjalanan dinas tidak terikat
+   siklus hidup satu baris penugasan tertentu, dan satu personil bisa
+   punya BANYAK perjalanan berbeda dalam satu project (tidak ada
+   unique constraint, beda dari `personnel_assignments` yang unique
+   per (project, personnel)).
+3. **UI CRUD dinested di tab "Personel" yang sudah ada**
+   (`ProjectPersonnel\Manager`), BUKAN tab ke-12 baru di `Projects\Show` —
+   perjalanan dinas secara kontekstual adalah aktivitas personil, dan
+   halaman project sudah punya banyak tab.
+4. **`documents.travel_assignment_id`** (migrasi ADDITIVE, nullable,
+   `nullOnDelete()`) + `resolveScalar()` parameter ke-6 (`?TravelAssignment`,
+   ditambah di akhir seperti $costItem sebelumnya) — pola IDENTIK
+   payment/deliverable/cost_item (D-027/D-033), termasuk validasi
+   cross-project di `DocumentGeneratorService::generate()`.
+5. **`personnel_id` pakai `restrictOnDelete()`** (pola sama
+   `personnel_assignments`) — melindungi master data Personnel dari
+   terhapus kalau masih dirujuk riwayat perjalanan dinas.
+
+**Verifikasi:** diverifikasi end-to-end SUNGGUHAN di browser — tambah
+perjalanan dinas lewat tab Personel (personel, tujuan, keperluan,
+tanggal berangkat/kembali, moda transportasi), tersimpan dan tampil
+benar di daftar. 7 test baru: CRUD lewat Livewire (termasuk validasi
+tanggal kembali tidak boleh sebelum berangkat), edit+hapus, dan alur
+generate dokumen (link ke Document, validasi cross-project, auto-fill
+`travel.*` lewat Livewire GeneratedDocuments\Manager).
+
+**Hasil:** 222 test (7 baru), `composer ci` bersih.

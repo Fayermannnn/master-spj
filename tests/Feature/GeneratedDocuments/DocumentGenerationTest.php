@@ -24,6 +24,7 @@ use App\Models\Payment;
 use App\Models\Personnel;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -698,4 +699,70 @@ it('only lists personnel-linked cost items as salary options, excluding non-pers
 
     expect($options->pluck('id'))->toContain($salaryItem->id);
     expect($options->pluck('id'))->not->toContain($nonPersonnelItem->id);
+});
+
+it('links a generated document to the selected TravelAssignment and stores it as travel_assignment_id', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['travel.destination'])]);
+
+    $personnel = Personnel::factory()->create(['organization_id' => $project->organization_id]);
+    $travel = TravelAssignment::factory()->create(['project_id' => $project->id, 'personnel_id' => $personnel->id]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        null,
+        null,
+        $travel,
+    );
+
+    expect($document->travel_assignment_id)->toBe($travel->id);
+});
+
+it('rejects generating with a travel assignment from a different project', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+
+    $otherProject = Project::factory()->create();
+    $travel = TravelAssignment::factory()->create(['project_id' => $otherProject->id]);
+
+    app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template,
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        null,
+        null,
+        $travel,
+    );
+})->throws(DomainActionException::class);
+
+it('auto-fills travel.* variables when a TravelAssignment is selected through the Livewire manager', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['travel.personnel_name', 'travel.destination', 'travel.departure_date'])]);
+
+    $personnel = Personnel::factory()->create(['organization_id' => $project->organization_id, 'name' => 'Ahmad Fauzi']);
+    $travel = TravelAssignment::factory()->create([
+        'project_id' => $project->id,
+        'personnel_id' => $personnel->id,
+        'destination' => 'Samarinda',
+        'departure_date' => '2026-03-01',
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id)
+        ->set('selectedTravelAssignmentId', $travel->id);
+
+    $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
+    $inputs = $component->get('variableInputs');
+
+    expect($inputs[array_search('travel.personnel_name', $keys, true)])->toBe('Ahmad Fauzi');
+    expect($inputs[array_search('travel.destination', $keys, true)])->toBe('Samarinda');
+    expect($inputs[array_search('travel.departure_date', $keys, true)])->toBe('01 Maret 2026');
 });

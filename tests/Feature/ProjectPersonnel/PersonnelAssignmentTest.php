@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Personnel;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -105,4 +106,71 @@ it('prevents a member from another organization from managing assignments on som
     Livewire::actingAs($outsider)
         ->test(Manager::class, ['project' => $project])
         ->assertForbidden();
+});
+
+it('adds a travel assignment for a personnel on the project', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeAssignmentAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $personnel = Personnel::factory()->create(['organization_id' => $organization->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openTravelForm')
+        ->set('travel_personnel_id', $personnel->id)
+        ->set('travel_destination', 'Samarinda')
+        ->set('travel_purpose', 'Koordinasi dengan PPK')
+        ->set('travel_departure_date', '2026-03-01')
+        ->set('travel_return_date', '2026-03-05')
+        ->call('saveTravel')
+        ->assertHasNoErrors();
+
+    $travel = $project->travelAssignments()->firstOrFail();
+    expect($travel->personnel_id)->toBe($personnel->id);
+    expect($travel->destination)->toBe('Samarinda');
+});
+
+it('rejects a travel assignment where the return date is before the departure date', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeAssignmentAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $personnel = Personnel::factory()->create(['organization_id' => $organization->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openTravelForm')
+        ->set('travel_personnel_id', $personnel->id)
+        ->set('travel_destination', 'Samarinda')
+        ->set('travel_purpose', 'Koordinasi dengan PPK')
+        ->set('travel_departure_date', '2026-03-05')
+        ->set('travel_return_date', '2026-03-01')
+        ->call('saveTravel')
+        ->assertHasErrors(['travel_return_date']);
+});
+
+it('edits and deletes a travel assignment', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeAssignmentAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $personnel = Personnel::factory()->create(['organization_id' => $organization->id]);
+    $travel = TravelAssignment::factory()->create([
+        'project_id' => $project->id,
+        'personnel_id' => $personnel->id,
+        'destination' => 'Balikpapan',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('editTravel', $travel->id)
+        ->set('travel_destination', 'Bontang')
+        ->call('saveTravel')
+        ->assertHasNoErrors();
+
+    expect($travel->fresh()->destination)->toBe('Bontang');
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('deleteTravel', $travel->id);
+
+    expect($project->travelAssignments()->count())->toBe(0);
 });

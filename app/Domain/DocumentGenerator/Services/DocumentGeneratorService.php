@@ -19,6 +19,7 @@ use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
 use App\Models\Payment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -60,6 +61,7 @@ class DocumentGeneratorService
         ?User $generatedBy,
         ?Deliverable $deliverable = null,
         ?CostItem $costItem = null,
+        ?TravelAssignment $travelAssignment = null,
     ): Document {
         if ($template->document_requirement_id !== $requirement->id) {
             throw new DomainActionException('Template yang dipilih tidak sesuai dengan requirement dokumen ini.');
@@ -75,6 +77,10 @@ class DocumentGeneratorService
 
         if ($costItem !== null && $costItem->project_id !== $project->id) {
             throw new DomainActionException('Item biaya yang dipilih harus berasal dari project yang sama.');
+        }
+
+        if ($travelAssignment !== null && $travelAssignment->project_id !== $project->id) {
+            throw new DomainActionException('Perjalanan dinas yang dipilih harus berasal dari project yang sama.');
         }
 
         $project->loadMissing(['organization', 'client', 'ppkContact', 'contract', 'personnelAssignments.personnel']);
@@ -197,6 +203,7 @@ class DocumentGeneratorService
             'payment_id' => $payment?->id,
             'deliverable_id' => $deliverable?->id,
             'cost_item_id' => $costItem?->id,
+            'travel_assignment_id' => $travelAssignment?->id,
             'number' => $documentNumber,
             'version' => $version,
             'name' => $requirement->name,

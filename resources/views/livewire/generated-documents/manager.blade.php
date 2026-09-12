@@ -85,6 +85,19 @@
                         </div>
                     @endif
 
+                    @if ($this->needsTravelContext($template))
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Perjalanan Dinas Terkait (untuk SPPD)</label>
+                            <select wire:model.live="selectedTravelAssignmentId" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                                <option value="">— Isi manual di bawah —</option>
+                                @foreach ($this->travelAssignmentOptions() as $travel)
+                                    <option value="{{ $travel->id }}">{{ $travel->personnel?->name }} — {{ $travel->destination }} ({{ $travel->departure_date->translatedFormat('d M Y') }})</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-xs text-slate-400">Memilih perjalanan dinas mengisi otomatis kolom "travel.*" di bawah — tetap bisa diedit manual. Tambah/kelola data perjalanan dinas di tab "Personel".</p>
+                        </div>
+                    @endif
+
                     @foreach ($this->tablelessDetectedKeys($template) as $index => $key)
                         <div>
                             @php $wrappedKey = '{{'.$key.'}}'; @endphp

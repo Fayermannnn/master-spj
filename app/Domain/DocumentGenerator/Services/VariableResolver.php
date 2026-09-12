@@ -9,6 +9,7 @@ use App\Models\Deliverable;
 use App\Models\Payment;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
 use Illuminate\Support\Carbon;
 
 /**
@@ -42,6 +43,8 @@ class VariableResolver
             'salary.description', 'salary.quantity', 'salary.unit', 'salary.unit_price',
             'salary.subtotal', 'salary.tax_amount', 'salary.total', 'salary.amount_terbilang',
             'salary.period_start', 'salary.period_end',
+            'travel.personnel_name', 'travel.personnel_position', 'travel.destination',
+            'travel.purpose', 'travel.departure_date', 'travel.return_date', 'travel.transportation_mode',
             'document.number',
             'today',
         ];
@@ -82,10 +85,11 @@ class VariableResolver
         ];
     }
 
-    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null, ?CostItem $costItem = null): ?string
+    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null, ?CostItem $costItem = null, ?TravelAssignment $travelAssignment = null): ?string
     {
         $personnelAssignment = $costItem?->personnelAssignment;
         $personnel = $personnelAssignment?->personnel;
+        $travelPersonnel = $travelAssignment?->personnel;
 
         return match ($key) {
             'project.name' => $project->name,
@@ -121,8 +125,15 @@ class VariableResolver
             'salary.tax_amount' => $this->formatCurrency($costItem?->tax_amount),
             'salary.total' => $this->formatCurrency($costItem?->total),
             'salary.amount_terbilang' => $costItem !== null ? $this->terbilangRupiah((float) $costItem->total) : null,
-            'salary.period_start' => $this->formatDate($costItem?->personnelAssignment?->start_date),
-            'salary.period_end' => $this->formatDate($costItem?->personnelAssignment?->end_date),
+            'salary.period_start' => $this->formatDate($personnelAssignment?->start_date),
+            'salary.period_end' => $this->formatDate($personnelAssignment?->end_date),
+            'travel.personnel_name' => $travelPersonnel?->name,
+            'travel.personnel_position' => $travelPersonnel?->position,
+            'travel.destination' => $travelAssignment?->destination,
+            'travel.purpose' => $travelAssignment?->purpose,
+            'travel.departure_date' => $this->formatDate($travelAssignment?->departure_date),
+            'travel.return_date' => $this->formatDate($travelAssignment?->return_date),
+            'travel.transportation_mode' => $travelAssignment?->transportation_mode,
             'today' => $this->formatDate(Carbon::now()),
             default => null,
         };

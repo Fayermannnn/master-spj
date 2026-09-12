@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Livewire\ProjectPersonnel;
 
 use App\Domain\Personnel\Services\PersonnelAssignmentService;
+use App\Domain\Personnel\Services\TravelAssignmentService;
 use App\Models\Personnel;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -39,6 +43,22 @@ class Manager extends Component
     public string $end_date = '';
 
     public string $notes = '';
+
+    public bool $showTravelForm = false;
+
+    public ?TravelAssignment $editingTravel = null;
+
+    public string $travel_personnel_id = '';
+
+    public string $travel_destination = '';
+
+    public string $travel_purpose = '';
+
+    public string $travel_departure_date = '';
+
+    public string $travel_return_date = '';
+
+    public string $travel_transportation_mode = '';
 
     public function mount(Project $project): void
     {
@@ -149,11 +169,98 @@ class Manager extends Component
             ->get();
     }
 
+    public function openTravelForm(): void
+    {
+        $this->showTravelForm = true;
+        $this->editingTravel = null;
+        $this->reset(['travel_personnel_id', 'travel_destination', 'travel_purpose', 'travel_departure_date', 'travel_return_date', 'travel_transportation_mode']);
+        $this->resetErrorBag();
+    }
+
+    public function editTravel(string $travelAssignmentId): void
+    {
+        $travel = $this->project->travelAssignments()->findOrFail($travelAssignmentId);
+
+        $this->showTravelForm = true;
+        $this->editingTravel = $travel;
+        $this->travel_personnel_id = $travel->personnel_id;
+        $this->travel_destination = $travel->destination;
+        $this->travel_purpose = $travel->purpose;
+        $this->travel_departure_date = $travel->departure_date->toDateString();
+        $this->travel_return_date = $travel->return_date->toDateString();
+        $this->travel_transportation_mode = (string) $travel->transportation_mode;
+    }
+
+    public function cancelTravelForm(): void
+    {
+        $this->showTravelForm = false;
+        $this->editingTravel = null;
+        $this->reset(['travel_personnel_id', 'travel_destination', 'travel_purpose', 'travel_departure_date', 'travel_return_date', 'travel_transportation_mode']);
+        $this->resetErrorBag();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function travelRules(): array
+    {
+        return [
+            'travel_personnel_id' => [
+                'required', 'ulid',
+                Rule::exists('personnel', 'id')->where('organization_id', $this->project->organization_id),
+            ],
+            'travel_destination' => ['required', 'string', 'max:255'],
+            'travel_purpose' => ['required', 'string', 'max:1000'],
+            'travel_departure_date' => ['required', 'date'],
+            'travel_return_date' => ['required', 'date', 'after_or_equal:travel_departure_date'],
+            'travel_transportation_mode' => ['nullable', 'string', 'max:100'],
+        ];
+    }
+
+    public function saveTravel(TravelAssignmentService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $data = $this->validate($this->travelRules());
+
+        $payload = [
+            'personnel_id' => $data['travel_personnel_id'],
+            'destination' => $data['travel_destination'],
+            'purpose' => $data['travel_purpose'],
+            'departure_date' => $data['travel_departure_date'],
+            'return_date' => $data['travel_return_date'],
+            'transportation_mode' => $data['travel_transportation_mode'] ?: null,
+        ];
+
+        if ($this->editingTravel) {
+            $service->update($this->editingTravel, $payload);
+            session()->flash('status', 'Perjalanan dinas berhasil diperbarui.');
+        } else {
+            /** @var User $creator */
+            $creator = Auth::user();
+            $service->create($this->project, $payload, $creator);
+            session()->flash('status', 'Perjalanan dinas berhasil ditambahkan.');
+        }
+
+        $this->cancelTravelForm();
+    }
+
+    public function deleteTravel(string $travelAssignmentId, TravelAssignmentService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $travel = $this->project->travelAssignments()->findOrFail($travelAssignmentId);
+        $service->delete($travel);
+
+        session()->flash('status', 'Perjalanan dinas berhasil dihapus.');
+    }
+
     public function render(): View
     {
         return view('livewire.project-personnel.manager', [
             'assignments' => $this->project->personnelAssignments()->with('personnel')->latest()->get(),
             'personnelOptions' => $this->personnelOptions(),
+            'travelAssignments' => $this->project->travelAssignments()->with('personnel')->latest('departure_date')->get(),
         ]);
     }
 }

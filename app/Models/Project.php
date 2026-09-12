@@ -168,4 +168,12 @@ class Project extends Model
     {
         return $this->hasMany(Deliverable::class);
     }
+
+    /**
+     * @return HasMany<TravelAssignment, $this>
+     */
+    public function travelAssignments(): HasMany
+    {
+        return $this->hasMany(TravelAssignment::class);
+    }
 }

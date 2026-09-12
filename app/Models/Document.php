@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[Fillable([
     'project_id', 'document_requirement_id', 'document_template_id', 'payment_id',
-    'deliverable_id', 'cost_item_id', 'number', 'version', 'name', 'data_snapshot', 'disk', 'path', 'original_filename',
+    'deliverable_id', 'cost_item_id', 'travel_assignment_id', 'number', 'version', 'name', 'data_snapshot', 'disk', 'path', 'original_filename',
     'mime_type', 'size', 'pdf_disk', 'pdf_path', 'pdf_original_filename', 'pdf_size',
     'generated_by', 'generated_at', 'notes',
 ])]
@@ -93,6 +93,14 @@ class Document extends Model
     public function costItem(): BelongsTo
     {
         return $this->belongsTo(CostItem::class);
+    }
+
+    /**
+     * @return BelongsTo<TravelAssignment, $this>
+     */
+    public function travelAssignment(): BelongsTo
+    {
+        return $this->belongsTo(TravelAssignment::class);
     }
 
     /**

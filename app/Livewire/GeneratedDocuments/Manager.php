@@ -16,6 +16,7 @@ use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
 use App\Models\Payment;
 use App\Models\Project;
+use App\Models\TravelAssignment;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -54,6 +55,8 @@ class Manager extends Component
 
     public ?string $selectedCostItemId = null;
 
+    public ?string $selectedTravelAssignmentId = null;
+
     /**
      * Cache per-render (BUKAN state Livewire — `private`, tidak
      * disinkronkan lewat wire) supaya tab "Dokumen" tidak menjalankan
@@ -87,9 +90,10 @@ class Manager extends Component
         $this->selectedPaymentId = null;
         $this->selectedDeliverableId = null;
         $this->selectedCostItemId = null;
+        $this->selectedTravelAssignmentId = null;
 
         $template = $this->activeTemplateFor($requirementId);
-        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null, null);
+        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null, null, null);
     }
 
     public function updatedSelectedPaymentId(): void
@@ -160,9 +164,32 @@ class Manager extends Component
         }
     }
 
+    /**
+     * Mengisi otomatis `travel.*` sebagai DEFAULT saat sebuah
+     * TravelAssignment dipilih — sama seperti selector lain di atas.
+     */
+    public function updatedSelectedTravelAssignmentId(): void
+    {
+        if ($this->selectedRequirementId === null) {
+            return;
+        }
+
+        $resolver = app(VariableResolver::class);
+        $template = $this->activeTemplateFor($this->selectedRequirementId);
+        $travelAssignment = $this->selectedTravelAssignmentId !== null && $this->selectedTravelAssignmentId !== ''
+            ? $this->project->travelAssignments()->find($this->selectedTravelAssignmentId)
+            : null;
+
+        foreach ($this->tablelessDetectedKeys($template, $resolver) as $index => $key) {
+            if (str_starts_with($key, 'travel.')) {
+                $this->variableInputs[$index] = $resolver->resolveScalar($key, $this->project, null, null, null, $travelAssignment) ?? '';
+            }
+        }
+    }
+
     public function closeGenerateForm(): void
     {
-        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId', 'selectedCostItemId']);
+        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId', 'selectedCostItemId', 'selectedTravelAssignmentId']);
     }
 
     public function generate(DocumentGeneratorService $service): void
@@ -194,6 +221,10 @@ class Manager extends Component
             ? $this->project->costItems()->find($this->selectedCostItemId)
             : null;
 
+        $travelAssignment = $this->selectedTravelAssignmentId !== null && $this->selectedTravelAssignmentId !== ''
+            ? $this->project->travelAssignments()->find($this->selectedTravelAssignmentId)
+            : null;
+
         /** @var User $user */
         $user = Auth::user();
 
@@ -201,7 +232,7 @@ class Manager extends Component
         $scalarValues = array_combine($keys, array_pad($this->variableInputs, count($keys), ''));
 
         try {
-            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable, $costItem);
+            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable, $costItem, $travelAssignment);
             $this->closeGenerateForm();
             session()->flash('status', "Dokumen \"{$requirement->name}\" berhasil digenerate.");
         } catch (DomainActionException $exception) {
@@ -280,6 +311,20 @@ class Manager extends Component
             ->get();
     }
 
+    public function needsTravelContext(?DocumentTemplate $template): bool
+    {
+        return collect($this->tablelessDetectedKeys($template))
+            ->contains(fn (string $key): bool => str_starts_with($key, 'travel.'));
+    }
+
+    /**
+     * @return Collection<int, TravelAssignment>
+     */
+    public function travelAssignmentOptions(): Collection
+    {
+        return $this->project->travelAssignments()->with('personnel')->latest('departure_date')->get();
+    }
+
     /**
      * @return list<string>
      */
@@ -310,10 +355,10 @@ class Manager extends Component
     /**
      * @return list<string>
      */
-    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable, ?CostItem $costItem): array
+    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable, ?CostItem $costItem, ?TravelAssignment $travelAssignment): array
     {
         return array_map(
-            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable, $costItem) ?? '',
+            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable, $costItem, $travelAssignment) ?? '',
             $this->tablelessDetectedKeys($template, $resolver),
         );
     }
