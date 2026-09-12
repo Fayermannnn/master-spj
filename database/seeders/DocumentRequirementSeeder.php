@@ -70,6 +70,42 @@ class DocumentRequirementSeeder extends Seeder
             field: RequirementRuleField::HasTravelCost,
             operator: RequirementRuleOperator::IsTrue,
         );
+
+        $this->seedConditional(
+            code: 'SURAT_PERMINTAAN_PEMBAYARAN',
+            name: 'Surat Permintaan Pembayaran',
+            category: 'Keuangan',
+            sortOrder: 130,
+            field: RequirementRuleField::HasPayments,
+            operator: RequirementRuleOperator::IsTrue,
+        );
+
+        $this->seedConditional(
+            code: 'SLIP_GAJI',
+            name: 'Slip Gaji/Honor Personel',
+            category: 'Personel',
+            sortOrder: 140,
+            field: RequirementRuleField::HasPersonnelAssignments,
+            operator: RequirementRuleOperator::IsTrue,
+        );
+
+        $this->seedConditional(
+            code: 'SURAT_PERJALANAN_DINAS',
+            name: 'Surat Perjalanan Dinas',
+            category: 'Keuangan',
+            sortOrder: 150,
+            field: RequirementRuleField::HasTravelCost,
+            operator: RequirementRuleOperator::IsTrue,
+        );
+
+        $this->seedConditional(
+            code: 'ABSENSI_TENAGA_AHLI',
+            name: 'Absensi Tenaga Ahli',
+            category: 'Personel',
+            sortOrder: 160,
+            field: RequirementRuleField::HasPersonnelAssignments,
+            operator: RequirementRuleOperator::IsTrue,
+        );
     }
 
     private function seedConditional(

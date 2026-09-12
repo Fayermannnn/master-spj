@@ -34,7 +34,8 @@ class VariableResolver
             'project.contract_value', 'project.start_date', 'project.end_date',
             'client.name', 'client.address', 'ppk.name',
             'provider.name', 'provider.address',
-            'payment.amount', 'payment.termin', 'payment.date',
+            'payment.amount', 'payment.amount_terbilang', 'payment.termin', 'payment.date',
+            'payment.name', 'payment.percentage', 'payment.trigger',
             'deliverable.name', 'deliverable.target_date',
             'document.number',
             'today',
@@ -87,8 +88,12 @@ class VariableResolver
             'provider.name' => $project->organization?->name,
             'provider.address' => $project->organization?->address,
             'payment.amount' => $this->formatCurrency($payment?->amount),
+            'payment.amount_terbilang' => $payment !== null ? $this->terbilangRupiah((float) $payment->amount) : null,
             'payment.termin' => $payment !== null ? (string) $payment->termin_number : null,
             'payment.date' => $payment !== null ? $this->formatDate($payment->payment_date ?? $payment->target_date) : null,
+            'payment.name' => $payment?->name,
+            'payment.percentage' => $payment?->percentage !== null ? rtrim(rtrim((string) $payment->percentage, '0'), '.').'%' : null,
+            'payment.trigger' => $payment?->trigger,
             'deliverable.name' => $deliverable?->name,
             'deliverable.target_date' => $this->formatDate($deliverable?->target_date),
             'today' => $this->formatDate(Carbon::now()),
@@ -123,6 +128,43 @@ class VariableResolver
                 ?? '-',
             'personnel.npwp' => ($personnel !== null ? $personnel->npwp : null) ?? '-',
         ];
+    }
+
+    /**
+     * "Terbilang" — nominal dieja jadi kalimat Bahasa Indonesia (mis.
+     * "Seratus Juta Rupiah"), lazim di surat keuangan formal (SPP,
+     * Kwitansi, Invoice). Rekursif standar, dibulatkan ke rupiah penuh
+     * (tidak menangani sen).
+     */
+    private function terbilangRupiah(float $amount): string
+    {
+        $rounded = (int) round($amount);
+
+        if ($rounded === 0) {
+            return 'Nol Rupiah';
+        }
+
+        $words = ucwords(trim(preg_replace('/\s+/', ' ', $this->terbilang(abs($rounded))) ?? ''));
+
+        return ($rounded < 0 ? 'Minus ' : '').$words.' Rupiah';
+    }
+
+    private function terbilang(int $number): string
+    {
+        $ones = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+
+        return match (true) {
+            $number < 12 => $ones[$number],
+            $number < 20 => $this->terbilang($number - 10).' belas',
+            $number < 100 => trim($this->terbilang(intdiv($number, 10)).' puluh '.($number % 10 !== 0 ? $this->terbilang($number % 10) : '')),
+            $number < 200 => trim('seratus '.($number % 100 !== 0 ? $this->terbilang($number % 100) : '')),
+            $number < 1000 => trim($this->terbilang(intdiv($number, 100)).' ratus '.($number % 100 !== 0 ? $this->terbilang($number % 100) : '')),
+            $number < 2000 => trim('seribu '.($number % 1000 !== 0 ? $this->terbilang($number % 1000) : '')),
+            $number < 1_000_000 => trim($this->terbilang(intdiv($number, 1000)).' ribu '.($number % 1000 !== 0 ? $this->terbilang($number % 1000) : '')),
+            $number < 1_000_000_000 => trim($this->terbilang(intdiv($number, 1_000_000)).' juta '.($number % 1_000_000 !== 0 ? $this->terbilang($number % 1_000_000) : '')),
+            $number < 1_000_000_000_000 => trim($this->terbilang(intdiv($number, 1_000_000_000)).' miliar '.($number % 1_000_000_000 !== 0 ? $this->terbilang($number % 1_000_000_000) : '')),
+            default => trim($this->terbilang(intdiv($number, 1_000_000_000_000)).' triliun '.($number % 1_000_000_000_000 !== 0 ? $this->terbilang($number % 1_000_000_000_000) : '')),
+        };
     }
 
     private function formatCurrency(mixed $value): ?string

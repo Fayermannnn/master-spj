@@ -32,9 +32,16 @@ class TemplateVariableSeeder extends Seeder
             ['key' => 'personnel.position', 'label' => 'Posisi Personel', 'type' => TemplateVariableDataType::Table],
             ['key' => 'personnel.npwp', 'label' => 'NPWP Personel', 'type' => TemplateVariableDataType::Table],
             ['key' => 'payment.amount', 'label' => 'Nominal Pembayaran', 'type' => TemplateVariableDataType::Currency],
+            ['key' => 'payment.amount_terbilang', 'label' => 'Nominal Pembayaran (Terbilang)', 'type' => TemplateVariableDataType::Text],
             ['key' => 'payment.termin', 'label' => 'Nomor Termin', 'type' => TemplateVariableDataType::Number],
             ['key' => 'payment.date', 'label' => 'Tanggal Pembayaran', 'type' => TemplateVariableDataType::Date],
+            ['key' => 'payment.name', 'label' => 'Nama Termin', 'type' => TemplateVariableDataType::Text],
+            ['key' => 'payment.percentage', 'label' => 'Persentase Termin', 'type' => TemplateVariableDataType::Text],
+            ['key' => 'payment.trigger', 'label' => 'Pemicu Pembayaran', 'type' => TemplateVariableDataType::Text],
             ['key' => 'deliverable.name', 'label' => 'Nama Output/Deliverable', 'type' => TemplateVariableDataType::Text],
+            ['key' => 'deliverable.target_date', 'label' => 'Tanggal Target Deliverable', 'type' => TemplateVariableDataType::Date],
+            ['key' => 'document.number', 'label' => 'Nomor Dokumen (Otomatis)', 'type' => TemplateVariableDataType::Text],
+            ['key' => 'organization.logo', 'label' => 'Logo Organisasi (Kop Surat)', 'type' => TemplateVariableDataType::Image],
             ['key' => 'today', 'label' => 'Tanggal Hari Ini', 'type' => TemplateVariableDataType::Date],
         ];
 

@@ -1470,3 +1470,39 @@ DOCX hasil generate (diverifikasi lewat isi ZIP — ada file di
 `word/media/`, bukan cuma placeholder hilang dari teks).
 
 **Hasil:** 202 test (10 baru), `composer ci` bersih.
+
+## D-031 — Surat Permintaan Pembayaran (SPP) + variable `payment.*` baru + "terbilang"
+
+**Konteks:** Fitur kedua dari batch surat administratif (setelah kop
+surat, D-030). SPP dipetakan ke ENTITAS YANG SUDAH ADA (`Payment`) —
+TIDAK butuh tabel/model baru sama sekali, hanya variable resolver baru
++ satu baris `DocumentRequirement` — contoh paling jelas kenapa engine
+generik Phase 5-7 memang dirancang untuk kasus seperti ini (RULE 1).
+
+**Keputusan:**
+
+1. **4 variable `payment.*` baru**: `payment.name`, `payment.percentage`,
+   `payment.trigger` (field yang sudah ada di `Payment` tapi belum
+   diekspos ke `VariableResolver`), dan `payment.amount_terbilang`.
+2. **"Terbilang" (nominal dieja jadi kalimat)** diimplementasikan
+   sebagai algoritma rekursif standar Bahasa Indonesia di
+   `VariableResolver` sendiri — BUKAN dependency composer baru (pola
+   sama D-016: hindari dependency untuk hal yang bisa ditulis singkat).
+   Berguna untuk SPP/Kwitansi/Invoice sekaligus (variable BERSAMA,
+   bukan logic per jenis dokumen).
+3. **`SURAT_PERMINTAAN_PEMBAYARAN`** ditambahkan sebagai
+   `DocumentRequirement` kondisional (`HasPayments = true`, pola sama
+   `DAFTAR_PERSONEL`/`TIMESHEET`) — bukan requirement wajib untuk
+   SEMUA project, hanya muncul kalau project punya termin.
+4. **Sekalian ditambahkan 3 baris `DocumentRequirement` LAIN**
+   (`SLIP_GAJI`, `SURAT_PERJALANAN_DINAS`, `ABSENSI_TENAGA_AHLI`) untuk
+   commit-commit berikutnya di batch ini — datanya sudah ada duluan
+   (admin sudah bisa lihat/upload template untuk requirement ini),
+   TAPI variable pendukungnya (gaji/perjalanan/absensi) BELUM lengkap
+   sampai commit masing-masing selesai. Juga melengkapi
+   `TemplateVariableSeeder` yang sebelumnya ketinggalan `document.number`
+   dan `organization.logo` (ditambahkan D-029/D-030 tapi lupa diseed).
+
+**Hasil:** 210 test (8 baru — 7 kasus terbilang mencakup nol/belasan/
+puluhan/ratusan/ribuan/jutaan-miliaran/pembulatan desimal, 1 alur
+Livewire payment.* auto-fill), `composer ci` bersih.

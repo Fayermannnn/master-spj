@@ -315,6 +315,34 @@ it('resolves the payment context into payment.* placeholders when selected', fun
     expect($document->data_snapshot['payment.amount'])->toBe('Rp 150.000.000');
 });
 
+it('auto-fills payment.name/percentage/trigger/amount_terbilang when a payment is selected', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, [
+        'payment.name', 'payment.percentage', 'payment.trigger', 'payment.amount_terbilang',
+    ])]);
+    $payment = Payment::factory()->create([
+        'project_id' => $project->id,
+        'termin_number' => 1,
+        'name' => 'Termin 1',
+        'percentage' => 20,
+        'trigger' => 'Penandatanganan kontrak',
+        'amount' => 100_000_000,
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id)
+        ->set('selectedPaymentId', $payment->id);
+
+    $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
+    $inputs = $component->get('variableInputs');
+
+    expect($inputs[array_search('payment.name', $keys, true)])->toBe('Termin 1');
+    expect($inputs[array_search('payment.percentage', $keys, true)])->toBe('20%');
+    expect($inputs[array_search('payment.trigger', $keys, true)])->toBe('Penandatanganan kontrak');
+    expect($inputs[array_search('payment.amount_terbilang', $keys, true)])->toBe('Seratus Juta Rupiah');
+});
+
 it('links a generated document to a real Deliverable when one is selected', function (): void {
     ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
 
