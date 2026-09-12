@@ -7,7 +7,9 @@ lanjut tanpa kehilangan konteks.
 
 **Roadmap 10-fase awal SELESAI (Phase 1-10).** Fase tambahan di luar
 roadmap: **Notification — SELESAI**, **Audit Log viewer & self-service
-Profile — SELESAI**, **Backlog QA Phase 10 — SELESAI** (lihat D-024).
+Profile — SELESAI**, **Backlog QA Phase 10 — SELESAI** (D-024), **5
+fitur baru (Payment Allocation, Contract Addendum, Deliverable wiring,
+SPJ Review Workflow, Document Numbering) — SELESAI** (D-025 s/d D-029).
 Repo di-push ke GitHub (`https://github.com/Fayermannnn/master-spj`,
 Public — dikonfirmasi user).
 
@@ -96,6 +98,57 @@ Dua item backlog dari D-021 poin 9 dikerjakan:
   sekaligus kalau file sumbernya hilang.
 - 10 test baru (151 total).
 
+### 5 fitur baru (D-025 s/d D-029)
+
+User meminta "buatkan fitur baru minimal 5, tentukan sendiri, elaborasi"
+— kelima fitur DIPILIH berdasarkan gap nyata di blueprint/kode (bukan
+ide acak), dielaborasi ke user sebelum dikerjakan, satu commit per
+fitur, `composer ci` bersih di tiap langkah, 4 dari 5 diverifikasi
+sungguhan di browser.
+
+1. **Payment Item Allocation + Realisasi Anggaran (D-025)** — `payment_items`
+   (baru, menghubungkan `Payment`↔`CostItem`, entitas yang sudah disebut
+   blueprint §8 sejak Phase 0 tapi tidak pernah dibuat). Tab baru
+   "Realisasi Anggaran" di project menampilkan anggaran vs realisasi per
+   kategori biaya. Realisasi >100% SENGAJA tidak diblokir (sinyal, bukan
+   pelanggaran).
+2. **Riwayat Amandemen Kontrak (D-026)** — `ContractAddendum` mencatat
+   snapshot nilai lama→baru + alasan. `Contract.contract_value` TIDAK
+   BISA lagi diedit bebas lewat form utama setelah kontrak ada — HANYA
+   lewat adendum (dicek server-side, bukan cuma `disabled` HTML). Hanya
+   adendum TERAKHIR (urutan ULID) yang boleh dihapus.
+3. **Wiring Deliverable ke Document Generator (D-027)** — `documents.deliverable_id`
+   (opsional). `deliverable.name` bisa auto-fill dari `Deliverable` asli
+   saat generate dokumen, TETAP bisa diedit manual (tidak dipaksakan).
+4. **Alur Review/Approval Paket SPJ (D-028)** — `SpjPackageStatus`
+   bertambah `Submitted` (Draft→Submitted→Finalized, atau
+   Submitted→Draft kalau ditolak). Permission BARU `spj_packages.review`
+   TERPISAH dari `projects.update` — HANYA admin_perusahaan/super_admin,
+   BUKAN project_admin — supaya ada pemisahan peran nyata antara
+   penyusun dan penyetuju paket. `finalize()` diganti total oleh
+   `submit()`/`approve()`/`reject()` (`reject()` wajib alasan).
+5. **Penomoran Dokumen per Organisasi (D-029)** — `NumberingSetting`
+   (satu per organisasi, bukan per jenis dokumen). Placeholder BARU
+   `document.number`, RESERVED (tidak pernah jadi input bebas di form
+   generate, beda dari `payment.*`/`deliverable.*`) — hanya diisi
+   `DocumentGeneratorService` sendiri lewat `NumberingService::nextNumber()`
+   (transaksional, `lockForUpdate()`). Halaman pengaturan self-service
+   di `/settings/document-numbering` (pola sama `Profile\Edit`).
+
+Ini FINALLY mengisi domain `Workflow` (D-028) dan `Settings` (D-029)
+yang sejak Phase 0 cuma README — lihat "Known Issues" untuk apa yang
+masih TIDAK dibangun di dua domain ini (jangan asumsikan sudah lengkap).
+
+Total: 41 test baru (151 → 192), `composer ci` bersih di setiap commit.
+Diverifikasi sungguhan di browser: Fitur 1 (alokasi + laporan realisasi
+143% over-realization), Fitur 2 (adendum mengubah nilai kontrak di
+layar), Fitur 5 (live preview format nomor + simpan). Fitur 3 TIDAK
+diverifikasi ulang di browser (pola UI identik dengan Fitur 1 yang
+sudah terbukti). Fitur 4 hanya SEBAGIAN — tombol/badge baru ter-render
+benar tapi transisi status tidak bisa diklik via automasi karena
+`wire:confirm` (native browser dialog) memblokir klik scripted —
+keterbatasan tooling, bukan kode (9 test Pest mencakup penuh logikanya).
+
 ## Repository
 
 `https://github.com/Fayermannnn/master-spj` (**Public**, dikonfirmasi
@@ -120,53 +173,104 @@ Tambahan:
   organisasi PELAKU, bukan organisasi SUBJEK (lihat alasan di D-023).
   Ini keterbatasan yang disengaja, bukan bug.
 - Tidak ada halaman "riwayat login" terpisah dari Audit Log umum.
-- Domain `Settings` dan `Workflow` masih belum diimplementasikan —
-  tidak ada kebutuhan konkret yang mendorongnya.
+
+Dari 5 fitur baru sesi ini (D-025 s/d D-029):
+- **`Workflow`**: HANYA berisi review paket SPJ (D-028). TIDAK ADA
+  workflow generik lain (mis. approval untuk aksi domain lain) — kalau
+  dibutuhkan, itu perluasan terpisah dengan requirement konkretnya
+  sendiri, bukan generalisasi dari yang sudah ada.
+- **`Settings`**: HANYA berisi Penomoran Dokumen (D-029). Belum ada
+  pengaturan organisasi lain di sini (mis. preferensi notifikasi,
+  branding dokumen) — sama, tunggu kebutuhan konkret.
+- Realisasi anggaran (D-025) dihitung HANYA dari alokasi manual
+  (`payment_items`) — kalau tim lupa mengalokasikan pembayaran ke item
+  biaya, angka realisasi akan under-report tanpa peringatan. Tidak ada
+  validasi "termin ini sudah Paid tapi belum ada alokasi sama sekali".
+- SPJ review (D-028) tidak mencegah admin_perusahaan tunggal me-review
+  paket yang dia susun sendiri (disengaja, lihat D-028 poin 5) — kalau
+  organisasi butuh pemisahan peran yang lebih ketat, itu kebutuhan
+  operasional (rekrut/tunjuk reviewer terpisah), bukan sesuatu yang
+  bisa dipaksa sistem.
+- Penomoran dokumen (D-029) satu skema PER ORGANISASI, bukan per jenis
+  dokumen — kalau organisasi butuh format berbeda untuk SPJ vs surat
+  lain, itu perluasan model data terpisah.
 
 ## Environment
 
-Dependency baru: tidak ada. Tidak ada perubahan Tailwind class baru di
-fitur ini yang butuh `npm run build` ulang di luar yang sudah dilakukan
-sesi ini — tapi **aturan Phase 10 tetap berlaku**: selalu `npm run
-build` setelah mengubah class Tailwind di Blade manapun sebelum
-verifikasi browser (`.claude/launch.json` tidak menjalankan Vite dev
-server yang watch).
+Dependency baru: tidak ada. Migrasi baru sesi ini SUDAH dijalankan di
+DB dev (`master_spj`) — `php artisan migrate` tetap perlu dijalankan
+manual di lingkungan lain yang belum migrate. `RolePermissionSeeder`
+juga PERLU dijalankan ulang (`php artisan db:seed --class=RolePermissionSeeder`,
+idempotent — aman diulang) di lingkungan manapun yang datanya sudah ada
+dari SEBELUM D-028, supaya permission baru `spj_packages.review`
+ter-assign ke role admin_perusahaan/super_admin. Tailwind: **aturan
+Phase 10 tetap berlaku** — selalu `npm run build` setelah mengubah
+class Tailwind di Blade manapun sebelum verifikasi browser
+(`.claude/launch.json` tidak menjalankan Vite dev server yang watch).
 
 ## Next Task
 
-Tidak ada fase terjadwal berikutnya. Backlog QA Phase 10 (D-021 poin 9)
-SELESAI. Kemungkinan arah (lihat juga opsi yang sempat diajukan tapi
-belum dipilih user: SPJ submission tracking/`deliverable.name` wiring
-ke Deliverable model — lihat riwayat chat/D-022 konteks):
-1. Fitur baru lain sesuai kebutuhan konkret yang muncul.
+Tidak ada fase terjadwal berikutnya. Backlog QA Phase 10 SELESAI (D-024),
+5 fitur baru SELESAI (D-025 s/d D-029). Kemungkinan arah:
+1. Fitur baru lain sesuai kebutuhan konkret yang muncul — lihat "Known
+   Issues" untuk batas cakupan yang SENGAJA belum dibangun di kelima
+   fitur baru (jangan diasumsikan sudah lengkap).
 2. Aturan transisi status baru untuk ChecklistStatus/TemplateStatus/
    WorkplanStatus — HANYA kalau ada requirement bisnis konkret (lihat
    D-024), jangan diasumsikan sendiri.
-3. Permintaan fitur baru dari user.
-4. Production/deployment readiness — keputusan arsitektur besar baru
+3. Verifikasi browser lanjutan untuk Fitur 4 (SPJ review) — transisi
+   status belum sempat diklik-verifikasi karena `wire:confirm`
+   memblokir automasi; kalau sesi mendatang punya cara menangani native
+   dialog di tooling verifikasi, ini bisa dituntaskan.
+4. Permintaan fitur baru dari user.
+5. Production/deployment readiness — keputusan arsitektur besar baru
    kalau diminta (RULE 10).
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 151
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 192
 test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-024). Baru: D-024 (backlog QA
-Phase 10 — hanya SpjPackageStatus punya aturan transisi nyata, 3 enum
-lain sengaja dibiarkan tanpa validasi karena tidak ada invarian bisnis;
-2 bug file-hilang-dari-disk ditemukan & diperbaiki: crash 500 di
-GeneratedDocuments download, ZIP/manifest tidak sinkron di SpjPackages
-export; `FileStorageService::download()` baru dipakai di 4 controller
-download).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-029). Baru sesi ini:
+- **D-024**: backlog QA Phase 10 — hanya SpjPackageStatus punya aturan
+  transisi nyata, 3 enum lain sengaja dibiarkan tanpa validasi; 2 bug
+  file-hilang-dari-disk diperbaiki (`FileStorageService::download()`
+  dipakai di 4 controller download).
+- **D-025**: `payment_items` (entitas blueprint §8 yang belum pernah
+  dibuat) + `BudgetRealizationService`, realisasi >100% sengaja tidak
+  diblokir.
+- **D-026**: `ContractAddendum` — nilai kontrak HANYA berubah lewat
+  adendum (dicek server-side), hanya adendum terakhir (urutan ULID)
+  boleh dihapus.
+- **D-027**: `documents.deliverable_id` opsional, `deliverable.name`
+  auto-fill TAPI tetap bisa diedit manual.
+- **D-028**: `SpjPackageStatus` + `Submitted`, permission
+  `spj_packages.review` TERPISAH dari `projects.update` (segregasi
+  peran nyata: project_admin tidak punya, admin_perusahaan/super_admin
+  punya), `finalize()` diganti `submit()`/`approve()`/`reject()`.
+- **D-029**: `NumberingSetting` per organisasi, `document.number`
+  placeholder RESERVED (tidak pernah input bebas), halaman self-service
+  reuse `OrganizationPolicy::update`.
 
 ## Security Notes
 
-D-021/D-022 tetap berlaku, ditambah D-024: perbaikan file-hilang adalah
-hardening (mencegah stack trace Flysystem mentah bocor ke response 500
-saat DEBUG aktif), bukan celah otorisasi baru — `Gate::authorize()`
-tetap dipanggil LEBIH DULU di semua controller download sebelum
-`FileStorageService::download()` dipanggil, urutan ini tidak berubah
-dan tetap diverifikasi test (kasus cross-organization tetap
-`assertForbidden()`, bukan `assertNotFound()`).
+D-021/D-022/D-024 tetap berlaku. Tambahan dari 5 fitur baru:
+- **D-026**: `Contract.contract_value` sekarang dijaga di SERVER (bukan
+  cuma `disabled` HTML) — submit langsung ke form utama saat kontrak
+  sudah ada akan diabaikan diam-diam (di-`unset()` sebelum masuk
+  service), bukan celah baru — justru menutup celah lama (nilai bisa
+  diubah bebas tanpa jejak).
+- **D-028**: permission `spj_packages.review` adalah kontrol akses
+  BARU — diverifikasi test bahwa `project_admin` (tidak punya
+  permission ini) mendapat 403 saat mencoba `approve`/`reject`,
+  walaupun mereka punya `projects.update` dan bisa mengelola manifest
+  paket yang sama.
+- **D-029**: halaman pengaturan penomoran SELALU beroperasi ke
+  `Auth::user()->organization` sendiri — tidak menerima organization ID
+  dari route/request manapun, tidak ada celah IDOR (pola sama D-023
+  Profile). `NumberingService::nextNumber()` transaksional
+  (`lockForUpdate()`) — dua request generate dokumen bersamaan tidak
+  bisa mendapat nomor urut yang sama (race condition ditutup di level
+  DB lock, bukan cuma asumsi).
