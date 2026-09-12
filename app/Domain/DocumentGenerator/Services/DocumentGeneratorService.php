@@ -18,6 +18,7 @@ use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
 use App\Models\Payment;
+use App\Models\Personnel;
 use App\Models\Project;
 use App\Models\TravelAssignment;
 use App\Models\User;
@@ -62,6 +63,8 @@ class DocumentGeneratorService
         ?Deliverable $deliverable = null,
         ?CostItem $costItem = null,
         ?TravelAssignment $travelAssignment = null,
+        ?Personnel $attendancePersonnel = null,
+        ?string $attendanceMonth = null,
     ): Document {
         if ($template->document_requirement_id !== $requirement->id) {
             throw new DomainActionException('Template yang dipilih tidak sesuai dengan requirement dokumen ini.');
@@ -81,6 +84,10 @@ class DocumentGeneratorService
 
         if ($travelAssignment !== null && $travelAssignment->project_id !== $project->id) {
             throw new DomainActionException('Perjalanan dinas yang dipilih harus berasal dari project yang sama.');
+        }
+
+        if ($attendancePersonnel !== null && $attendancePersonnel->organization_id !== $project->organization_id) {
+            throw new DomainActionException('Personel yang dipilih harus berasal dari organisasi yang sama.');
         }
 
         $project->loadMissing(['organization', 'client', 'ppkContact', 'contract', 'personnelAssignments.personnel']);
@@ -103,7 +110,7 @@ class DocumentGeneratorService
             ? Storage::disk((string) $project->organization->logo_disk)->path($project->organization->logo_path)
             : null;
 
-        $tables = $this->resolveApplicableTables($template, $project);
+        $tables = $this->resolveApplicableTables($template, $project, $attendanceMonth);
 
         $absoluteTemplatePath = Storage::disk($template->disk)->path($template->path);
         $tempDocxPath = tempnam(sys_get_temp_dir(), 'spj_doc_').'.docx';
@@ -257,7 +264,7 @@ class DocumentGeneratorService
      *
      * @return array<string, list<array<string, string>>>
      */
-    private function resolveApplicableTables(DocumentTemplate $template, Project $project): array
+    private function resolveApplicableTables(DocumentTemplate $template, Project $project, ?string $attendanceMonth = null): array
     {
         $detected = $template->detected_variables ?? [];
         $tables = [];
@@ -276,7 +283,7 @@ class DocumentGeneratorService
                 continue;
             }
 
-            $tables[$representativeKey] = $this->resolver->resolveTableRows($group, $project);
+            $tables[$representativeKey] = $this->resolver->resolveTableRows($group, $project, $attendanceMonth);
         }
 
         return $tables;

@@ -98,6 +98,25 @@
                         </div>
                     @endif
 
+                    @if ($this->needsAttendanceContext($template))
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-slate-500">Personel (untuk Absensi)</label>
+                                <select wire:model.live="selectedAttendancePersonnelId" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                                    <option value="">— Pilih personel —</option>
+                                    @foreach ($this->attendancePersonnelOptions() as $person)
+                                        <option value="{{ $person->id }}">{{ $person->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-slate-500">Bulan Absensi</label>
+                                <input wire:model.live="attendanceMonth" type="month" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                                <p class="mt-1 text-xs text-slate-400">Baris tanggal 1 bulan penuh akan dibuat otomatis dengan kolom tanda tangan kosong untuk dicetak.</p>
+                            </div>
+                        </div>
+                    @endif
+
                     @foreach ($this->tablelessDetectedKeys($template) as $index => $key)
                         <div>
                             @php $wrappedKey = '{{'.$key.'}}'; @endphp

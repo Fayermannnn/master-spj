@@ -1635,3 +1635,61 @@ generate dokumen (link ke Document, validasi cross-project, auto-fill
 `travel.*` lewat Livewire GeneratedDocuments\Manager).
 
 **Hasil:** 222 test (7 baru), `composer ci` bersih.
+
+## D-035 — Absensi Tenaga Ahli: lembar cetak, BUKAN pencatatan digital
+
+**Konteks:** Fitur keenam (terakhir) dari batch surat administratif.
+Dikonfirmasi eksplisit ke user sebelum eksekusi (AskUserQuestion):
+absensi cukup LEMBAR CETAK (tabel tanggal 1 bulan dengan kolom
+tanda tangan kosong untuk diisi tangan di kertas), BUKAN sistem
+pencatatan kehadiran digital (yang butuh domain baru jauh lebih besar:
+input harian, riwayat, rekap).
+
+**Keputusan:**
+
+1. **Grup tabel `attendance` TIDAK dihitung dari tabel database
+   manapun** — beda dari SEMUA grup tabel lain (`personnel`,
+   `cost_items`) yang membaca dari model Eloquent. Baris absensi murni
+   dihitung dari rentang tanggal ("bulan-Y" mis. "2026-03") lewat
+   `Carbon`, satu baris per hari dalam bulan itu (28-31 baris
+   tergantung bulan). `attendance.signature` selalu berupa garis titik
+   kosong (`.....................`) — placeholder untuk ttd basah,
+   BUKAN field yang bisa diisi.
+2. **`resolveTableRows()`/`resolveScalar()` dapat parameter TAMBAHAN**
+   (`?string $attendanceMonth`, dan `resolveScalar()` juga dapat
+   `?Personnel $attendancePersonnel`) — BUKAN objek record yang sudah
+   ada (beda dari payment/deliverable/cost_item/travel_assignment yang
+   semuanya memilih SATU RECORD tersimpan) karena memang tidak ada
+   record untuk dipilih — hanya kombinasi (personil, bulan) sebagai
+   input murni.
+3. **TIDAK ADA kolom `documents.attendance_*` baru** — beda dari
+   fitur lain di batch ini (D-027/D-033/D-034 semua menambah FK
+   `documents.*_id`) — karena tidak ada entitas persisten untuk
+   direferensikan. `data_snapshot` (sudah ada sejak D-018) tetap
+   menyimpan `attendance.personnel_name`/`attendance.month_name` apa
+   adanya sebagai jejak, cukup tanpa FK tambahan.
+4. **Dropdown personil DIBATASI ke personil yang ditugaskan ke project
+   ini** (`attendancePersonnelOptions()`, `whereHas('assignments', ...)`) —
+   bukan seluruh personil organisasi, konsisten dengan filter serupa
+   di fitur Slip Gaji (D-033).
+5. **`Carbon::createFromFormat()` yang gagal parse jatuh diam-diam ke
+   bulan berjalan** (`Carbon::now()`), BUKAN exception — field bantu
+   ini berasal dari `<input type="month">` HTML yang secara normal
+   selalu valid; kalaupun diutak-atik lewat devtools, tidak masuk akal
+   menggagalkan SELURUH proses generate dokumen hanya karena satu
+   input pembantu ini rusak.
+
+**Verifikasi:** TIDAK diverifikasi visual di browser — sama seperti
+D-030 (Kop Surat), memerlukan upload template DOCX nyata dengan
+placeholder `attendance.*` yang tidak bisa dilakukan lewat automasi
+browser (keterbatasan `<input type="file">`). 17 test baru mencakup
+penuh: jumlah baris benar untuk bulan 28 hari DAN 31 hari, tidak ada
+baris kalau bulan tidak dipilih, resolve scalar personil/nama bulan,
+docx hasil generate berisi baris tanggal 1-31 lengkap, validasi
+cross-organization personil, alur Livewire auto-fill dari DUA input
+terpisah (personil + bulan), dan filter dropdown personil ke yang
+ditugaskan project saja.
+
+**Hasil:** 230 test (17 baru), `composer ci` bersih. Ini fitur
+TERAKHIR dari batch surat administratif (D-030 s/d D-035) — lihat
+PROJECT_HANDOVER.md untuk ringkasan keseluruhan.

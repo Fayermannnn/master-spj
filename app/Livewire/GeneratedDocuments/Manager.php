@@ -15,6 +15,7 @@ use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
 use App\Models\Payment;
+use App\Models\Personnel;
 use App\Models\Project;
 use App\Models\TravelAssignment;
 use App\Models\User;
@@ -57,6 +58,15 @@ class Manager extends Component
 
     public ?string $selectedTravelAssignmentId = null;
 
+    public ?string $selectedAttendancePersonnelId = null;
+
+    /**
+     * Format "Y-m" (mis. "2026-03") — BUKAN memilih record yang sudah
+     * ada, absensi cetak dihitung on-the-fly dari rentang tanggal satu
+     * bulan (PROJECT_DECISIONS.md D-035), bukan tabel database.
+     */
+    public string $attendanceMonth = '';
+
     /**
      * Cache per-render (BUKAN state Livewire — `private`, tidak
      * disinkronkan lewat wire) supaya tab "Dokumen" tidak menjalankan
@@ -91,9 +101,11 @@ class Manager extends Component
         $this->selectedDeliverableId = null;
         $this->selectedCostItemId = null;
         $this->selectedTravelAssignmentId = null;
+        $this->selectedAttendancePersonnelId = null;
+        $this->attendanceMonth = '';
 
         $template = $this->activeTemplateFor($requirementId);
-        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null, null, null);
+        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null, null, null, null, null);
     }
 
     public function updatedSelectedPaymentId(): void
@@ -187,9 +199,48 @@ class Manager extends Component
         }
     }
 
+    /**
+     * Mengisi otomatis `attendance.*` sebagai DEFAULT saat personil
+     * dan/atau bulan dipilih — dipanggil dari DUA properti berbeda
+     * (personil, bulan) karena keduanya sama-sama mempengaruhi nilai
+     * `attendance.personnel_name`/`attendance.month_name`.
+     */
+    public function updatedSelectedAttendancePersonnelId(): void
+    {
+        $this->refillAttendanceVariables();
+    }
+
+    public function updatedAttendanceMonth(): void
+    {
+        $this->refillAttendanceVariables();
+    }
+
+    private function refillAttendanceVariables(): void
+    {
+        if ($this->selectedRequirementId === null) {
+            return;
+        }
+
+        $resolver = app(VariableResolver::class);
+        $template = $this->activeTemplateFor($this->selectedRequirementId);
+        $personnel = $this->selectedAttendancePersonnelId !== null && $this->selectedAttendancePersonnelId !== ''
+            ? Personnel::query()->find($this->selectedAttendancePersonnelId)
+            : null;
+        $month = $this->attendanceMonth !== '' ? $this->attendanceMonth : null;
+
+        foreach ($this->tablelessDetectedKeys($template, $resolver) as $index => $key) {
+            if (str_starts_with($key, 'attendance.')) {
+                $this->variableInputs[$index] = $resolver->resolveScalar($key, $this->project, null, null, null, null, $personnel, $month) ?? '';
+            }
+        }
+    }
+
     public function closeGenerateForm(): void
     {
-        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId', 'selectedCostItemId', 'selectedTravelAssignmentId']);
+        $this->reset([
+            'selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId',
+            'selectedCostItemId', 'selectedTravelAssignmentId', 'selectedAttendancePersonnelId', 'attendanceMonth',
+        ]);
     }
 
     public function generate(DocumentGeneratorService $service): void
@@ -225,6 +276,11 @@ class Manager extends Component
             ? $this->project->travelAssignments()->find($this->selectedTravelAssignmentId)
             : null;
 
+        $attendancePersonnel = $this->selectedAttendancePersonnelId !== null && $this->selectedAttendancePersonnelId !== ''
+            ? Personnel::query()->find($this->selectedAttendancePersonnelId)
+            : null;
+        $attendanceMonth = $this->attendanceMonth !== '' ? $this->attendanceMonth : null;
+
         /** @var User $user */
         $user = Auth::user();
 
@@ -232,7 +288,7 @@ class Manager extends Component
         $scalarValues = array_combine($keys, array_pad($this->variableInputs, count($keys), ''));
 
         try {
-            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable, $costItem, $travelAssignment);
+            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable, $costItem, $travelAssignment, $attendancePersonnel, $attendanceMonth);
             $this->closeGenerateForm();
             session()->flash('status', "Dokumen \"{$requirement->name}\" berhasil digenerate.");
         } catch (DomainActionException $exception) {
@@ -325,6 +381,27 @@ class Manager extends Component
         return $this->project->travelAssignments()->with('personnel')->latest('departure_date')->get();
     }
 
+    public function needsAttendanceContext(?DocumentTemplate $template): bool
+    {
+        return collect($this->tablelessDetectedKeys($template))
+            ->contains(fn (string $key): bool => str_starts_with($key, 'attendance.'));
+    }
+
+    /**
+     * Personil yang ditugaskan ke project ini — pilihan absensi
+     * dibatasi ke personil yang memang bekerja di project, bukan
+     * seluruh personil organisasi.
+     *
+     * @return Collection<int, Personnel>
+     */
+    public function attendancePersonnelOptions(): Collection
+    {
+        return Personnel::query()
+            ->whereHas('assignments', fn ($query) => $query->where('project_id', $this->project->id))
+            ->orderBy('name')
+            ->get();
+    }
+
     /**
      * @return list<string>
      */
@@ -355,10 +432,10 @@ class Manager extends Component
     /**
      * @return list<string>
      */
-    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable, ?CostItem $costItem, ?TravelAssignment $travelAssignment): array
+    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable, ?CostItem $costItem, ?TravelAssignment $travelAssignment, ?Personnel $attendancePersonnel, ?string $attendanceMonth): array
     {
         return array_map(
-            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable, $costItem, $travelAssignment) ?? '',
+            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable, $costItem, $travelAssignment, $attendancePersonnel, $attendanceMonth) ?? '',
             $this->tablelessDetectedKeys($template, $resolver),
         );
     }

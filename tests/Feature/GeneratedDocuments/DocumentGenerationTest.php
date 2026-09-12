@@ -160,6 +160,41 @@ function invoiceTemplateDocxBytes(): string
 }
 
 /**
+ * Docx dengan tabel `attendance` (lembar cetak absensi) — terpisah dari
+ * helper lain untuk alasan yang sama (menghindari tabel yang tidak
+ * dipakai memicu error `cloneRowAndSetValues`/`deleteRow` di test lain).
+ */
+function attendanceTemplateDocxBytes(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'docx_attendance_').'.docx';
+
+    $documentXml = '<?xml version="1.0"?>'
+        .'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+        .'<w:p><w:r><w:t>Absensi: {{attendance.personnel_name}} — {{attendance.month_name}}</w:t></w:r></w:p>'
+        .'<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>'
+        .'<w:tr>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{attendance.date}}</w:t></w:r></w:p></w:tc>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{attendance.day_name}}</w:t></w:r></w:p></w:tc>'
+        .'<w:tc><w:tcPr/><w:p><w:r><w:t>{{attendance.signature}}</w:t></w:r></w:p></w:tc>'
+        .'</w:tr>'
+        .'</w:tbl>'
+        .'</w:body></w:document>';
+    $settingsXml = '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:settings>';
+
+    $zip = new ZipArchive;
+    $zip->open($path, ZipArchive::CREATE);
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
+    $zip->addFromString('word/document.xml', $documentXml);
+    $zip->addFromString('word/settings.xml', $settingsXml);
+    $zip->close();
+
+    $bytes = file_get_contents($path);
+    @unlink($path);
+
+    return $bytes;
+}
+
+/**
  * @return array{project: Project, requirement: DocumentRequirement, template: DocumentTemplate, user: User}
  */
 function buildGenerationScenario(): array
@@ -765,4 +800,94 @@ it('auto-fills travel.* variables when a TravelAssignment is selected through th
     expect($inputs[array_search('travel.personnel_name', $keys, true)])->toBe('Ahmad Fauzi');
     expect($inputs[array_search('travel.destination', $keys, true)])->toBe('Samarinda');
     expect($inputs[array_search('travel.departure_date', $keys, true)])->toBe('01 Maret 2026');
+});
+
+it('fills a full month of attendance rows for the selected personnel', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    Storage::disk($template->disk)->put($template->path, attendanceTemplateDocxBytes());
+    $template->update(['detected_variables' => [
+        'attendance.personnel_name', 'attendance.month_name', 'attendance.date', 'attendance.day_name', 'attendance.signature',
+    ]]);
+
+    $personnel = Personnel::factory()->create(['organization_id' => $project->organization_id, 'name' => 'Siti Aminah']);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['attendance.personnel_name' => 'Siti Aminah', 'attendance.month_name' => 'Maret 2026'],
+        null,
+        null,
+        null,
+        null,
+        null,
+        $personnel,
+        '2026-03',
+    );
+
+    $text = extractDocxText($document->disk, $document->path);
+    expect($text)
+        ->toContain('Siti Aminah')
+        ->toContain('Maret 2026')
+        ->toContain('01 Maret 2026')
+        ->toContain('31 Maret 2026')
+        ->not->toContain('{{')
+        ->not->toContain('}}');
+});
+
+it('rejects generating an attendance sheet with a personnel from a different organization', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+
+    $otherOrganization = Organization::factory()->create();
+    $personnel = Personnel::factory()->create(['organization_id' => $otherOrganization->id]);
+
+    app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template,
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        null,
+        null,
+        null,
+        $personnel,
+        '2026-03',
+    );
+})->throws(DomainActionException::class);
+
+it('auto-fills attendance.* scalars when personnel and month are selected through the Livewire manager', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['attendance.personnel_name', 'attendance.month_name'])]);
+
+    $personnel = Personnel::factory()->create(['organization_id' => $project->organization_id, 'name' => 'Rudi Hartono']);
+    PersonnelAssignment::factory()->create(['project_id' => $project->id, 'personnel_id' => $personnel->id]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id)
+        ->set('selectedAttendancePersonnelId', $personnel->id)
+        ->set('attendanceMonth', '2026-03');
+
+    $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
+    $inputs = $component->get('variableInputs');
+
+    expect($inputs[array_search('attendance.personnel_name', $keys, true)])->toBe('Rudi Hartono');
+    expect($inputs[array_search('attendance.month_name', $keys, true)])->toBe('Maret 2026');
+});
+
+it('only lists personnel assigned to the project as attendance options', function (): void {
+    ['project' => $project, 'user' => $user] = buildGenerationScenario();
+
+    $assignedPersonnel = Personnel::factory()->create(['organization_id' => $project->organization_id, 'name' => 'Assigned']);
+    PersonnelAssignment::factory()->create(['project_id' => $project->id, 'personnel_id' => $assignedPersonnel->id]);
+    $unassignedPersonnel = Personnel::factory()->create(['organization_id' => $project->organization_id, 'name' => 'Unassigned']);
+
+    $options = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->instance()
+        ->attendancePersonnelOptions();
+
+    expect($options->pluck('id'))->toContain($assignedPersonnel->id);
+    expect($options->pluck('id'))->not->toContain($unassignedPersonnel->id);
 });

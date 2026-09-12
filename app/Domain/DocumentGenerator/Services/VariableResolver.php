@@ -7,6 +7,7 @@ namespace App\Domain\DocumentGenerator\Services;
 use App\Models\CostItem;
 use App\Models\Deliverable;
 use App\Models\Payment;
+use App\Models\Personnel;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
 use App\Models\TravelAssignment;
@@ -45,6 +46,7 @@ class VariableResolver
             'salary.period_start', 'salary.period_end',
             'travel.personnel_name', 'travel.personnel_position', 'travel.destination',
             'travel.purpose', 'travel.departure_date', 'travel.return_date', 'travel.transportation_mode',
+            'attendance.personnel_name', 'attendance.month_name',
             'document.number',
             'today',
         ];
@@ -82,11 +84,20 @@ class VariableResolver
                 'cost_item.description', 'cost_item.quantity', 'cost_item.unit',
                 'cost_item.unit_price', 'cost_item.subtotal', 'cost_item.tax_amount', 'cost_item.total',
             ],
+            'attendance' => ['attendance.date', 'attendance.day_name', 'attendance.signature'],
         ];
     }
 
-    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null, ?CostItem $costItem = null, ?TravelAssignment $travelAssignment = null): ?string
-    {
+    public function resolveScalar(
+        string $key,
+        Project $project,
+        ?Payment $payment,
+        ?Deliverable $deliverable = null,
+        ?CostItem $costItem = null,
+        ?TravelAssignment $travelAssignment = null,
+        ?Personnel $attendancePersonnel = null,
+        ?string $attendanceMonth = null,
+    ): ?string {
         $personnelAssignment = $costItem?->personnelAssignment;
         $personnel = $personnelAssignment?->personnel;
         $travelPersonnel = $travelAssignment?->personnel;
@@ -134,6 +145,8 @@ class VariableResolver
             'travel.departure_date' => $this->formatDate($travelAssignment?->departure_date),
             'travel.return_date' => $this->formatDate($travelAssignment?->return_date),
             'travel.transportation_mode' => $travelAssignment?->transportation_mode,
+            'attendance.personnel_name' => $attendancePersonnel?->name,
+            'attendance.month_name' => $attendanceMonth !== null ? $this->formatMonth($attendanceMonth) : null,
             'today' => $this->formatDate(Carbon::now()),
             default => null,
         };
@@ -142,7 +155,7 @@ class VariableResolver
     /**
      * @return list<array<string, string>>
      */
-    public function resolveTableRows(string $group, Project $project): array
+    public function resolveTableRows(string $group, Project $project, ?string $attendanceMonth = null): array
     {
         return match ($group) {
             'personnel' => array_values($project->personnelAssignments->map(
@@ -151,6 +164,7 @@ class VariableResolver
             'cost_items' => array_values($project->costItems->map(
                 $this->costItemRow(...),
             )->all()),
+            'attendance' => $attendanceMonth !== null ? $this->attendanceRows($attendanceMonth) : [],
             default => [],
         };
     }
@@ -185,6 +199,49 @@ class VariableResolver
             'cost_item.tax_amount' => $this->formatCurrency($item->tax_amount) ?? '-',
             'cost_item.total' => $this->formatCurrency($item->total) ?? '-',
         ];
+    }
+
+    /**
+     * Baris tabel absensi — BUKAN dari tabel database manapun, murni
+     * dihitung dari rentang tanggal satu bulan (lembar cetak, absensi
+     * DIGITAL sengaja tidak dibangun — lihat PROJECT_DECISIONS.md
+     * D-035). `attendance.signature` sengaja berupa garis kosong untuk
+     * diisi tanda tangan basah di kertas.
+     *
+     * @return list<array<string, string>>
+     */
+    private function attendanceRows(string $attendanceMonth): array
+    {
+        $start = $this->parseAttendanceMonth($attendanceMonth)->startOfMonth();
+        $rows = [];
+
+        for ($day = 0; $day < $start->daysInMonth; $day++) {
+            $date = $start->copy()->addDays($day);
+
+            $rows[] = [
+                'attendance.date' => $date->translatedFormat('d F Y'),
+                'attendance.day_name' => $date->translatedFormat('l'),
+                'attendance.signature' => '.....................',
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function formatMonth(string $attendanceMonth): string
+    {
+        return $this->parseAttendanceMonth($attendanceMonth)->translatedFormat('F Y');
+    }
+
+    /**
+     * Format "Y-m" dari `<input type="month">` HTML — kalau tidak
+     * valid (mis. diutak-atik lewat devtools), diam-diam jatuh ke
+     * bulan berjalan alih-alih gagal generate seluruh dokumen hanya
+     * karena satu field bantu ini rusak.
+     */
+    private function parseAttendanceMonth(string $attendanceMonth): Carbon
+    {
+        return Carbon::createFromFormat('Y-m-d', "{$attendanceMonth}-01") ?: Carbon::now();
     }
 
     /**
