@@ -58,4 +58,12 @@ class DocumentRequirement extends Model
     {
         return $this->hasMany(ProjectChecklistItem::class);
     }
+
+    /**
+     * @return HasMany<DocumentTemplate, $this>
+     */
+    public function templates(): HasMany
+    {
+        return $this->hasMany(DocumentTemplate::class);
+    }
 }

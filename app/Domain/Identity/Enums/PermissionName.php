@@ -51,4 +51,5 @@ enum PermissionName: string
     case CostCategoriesManage = 'cost_categories.manage';
 
     case DocumentRequirementsManage = 'document_requirements.manage';
+    case TemplateVariablesManage = 'template_variables.manage';
 }

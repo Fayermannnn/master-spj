@@ -345,3 +345,70 @@ kompleksitas dari expression parser bebas (mis. tidak ada cara bagi rule
 untuk memanggil method sembarang atau membaca kolom sensitif). Menambah
 kondisi baru di masa depan = menambah 1 enum case + 1 baris match, bukan
 mengubah arsitektur.
+
+## D-016 — Document Template: diikat ke DocumentRequirement; scan placeholder tanpa dependency baru
+
+**Konteks:** §19-21 dan §63-64 master prompt: template dokumen dengan
+versioning, deteksi placeholder `{{variable}}`, dan master data
+`template_variables` untuk memvalidasi placeholder yang terdeteksi.
+Direncanakan & dikonfirmasi user di akhir Phase 5.
+
+**Keputusan:**
+1. `document_templates.document_requirement_id` — template diikat
+   LANGSUNG ke DocumentRequirement (bukan ke ProjectType), karena itu
+   yang benar-benar dipakai saat generate dokumen (Phase 7). Satu
+   requirement bisa punya banyak versi template (`version` unsigned int,
+   unique per requirement).
+2. `template_variables` — master data GLOBAL terpisah (pola sama dengan
+   ProjectType/CostCategory/dll), berisi key/label/data_type
+   (text/number/currency/date/boolean/array/table sesuai §20). Dipakai
+   HANYA untuk membandingkan/menandai placeholder yang terdeteksi
+   sebagai "dikenal" vs "tidak dikenal" (warning, bukan error blocking —
+   sesuai §64: template tetap tersimpan meski ada placeholder tak
+   dikenal).
+3. `DocxPlaceholderScanner` — memindai `word/document.xml` di dalam
+   arsip ZIP docx pakai `ZipArchive` BAWAAN PHP, tanpa dependency
+   composer baru. `phpoffice/phpword` (atau alternatif lain) SENGAJA
+   BELUM ditambahkan di Phase 6 — pemilihan library untuk MENGISI
+   template (bukan sekadar mendeteksi placeholder) ditunda ke Phase 7
+   (Document Generator) supaya keputusan itu dibuat dengan konteks
+   penuh kebutuhan generate (termasuk table variable §21), bukan
+   diputuskan prematur di sini.
+4. Placeholder yang terpecah jadi beberapa run XML oleh Word (hal lazim
+   karena formatting internal) ditangani dengan men-strip SELURUH tag
+   XML dulu sebelum regex — bukan hanya tag `<w:t>` — sehingga run yang
+   terpecah otomatis tergabung kembali secara tekstual.
+5. Satu-satunya versi berstatus Active per requirement dijaga oleh
+   `DocumentTemplateService::activate()` (meng-arsipkan versi lain),
+   BUKAN oleh constraint database (partial unique index tidak portable
+   antar driver).
+
+**Alasan:** Memisahkan "deteksi placeholder" (Phase 6, kebutuhan
+sederhana) dari "mengisi & generate DOCX" (Phase 7, kebutuhan jauh lebih
+kompleks: table variable berulang, format currency/date, dst) mencegah
+komitmen dini ke satu library sebelum kebutuhan generate benar-benar
+jelas — sejalan RULE 67 (jangan over-engineer) tanpa mengorbankan
+kualitas Phase 6 itu sendiri.
+
+## D-017 — Bug Blade: literal `{{`/`}}` di dalam tag echo membingungkan compiler
+
+**Konteks:** Ditemukan lewat test yang gagal (bukan lewat review manual)
+— `resources/views/livewire/document-templates/manager.blade.php` dan
+`template-variables/index.blade.php` menulis
+`{{ '{{'.$variableKey.'}}' }}` untuk menampilkan placeholder literal
+apa adanya. Blade compiler mencari `}}` PERTAMA yang ditemui secara
+tekstual (bukan aware terhadap string literal PHP di dalamnya) — pada
+pola itu, `}}` pertama yang ketemu ada DI DALAM string `'}}'`, bukan di
+akhir tag, sehingga hasil kompilasi PHP-nya rusak ("Unclosed '('").
+
+**Keputusan:** Bungkus nilai literal `{{...}}` di dalam blok `@php ... @endphp`
+menjadi variabel biasa dulu (mis. `$wrappedVariable = '{{'.$key.'}}';`),
+baru di-echo dengan `{{ $wrappedVariable }}` — tag echo yang isinya HANYA
+nama variabel, tidak ada karakter `{{`/`}}` literal di dalam tag itu
+sendiri.
+
+**Alasan:** Ini bug nyata (bukan gaya penulisan) yang membuat halaman
+500 di production kalau tidak ditemukan — dicatat di sini supaya pola
+"menampilkan contoh placeholder Handlebars-style di UI" tidak
+terulang di fase mendatang (Phase 7 Document Generator kemungkinan
+besar butuh menampilkan hal serupa).

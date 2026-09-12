@@ -89,8 +89,14 @@
                             @endcan
 
                             @can('create', \App\Models\DocumentRequirement::class)
-                                <x-nav-link :href="route('document-requirements.index')" :active="request()->routeIs('document-requirements.*')">
+                                <x-nav-link :href="route('document-requirements.index')" :active="request()->routeIs('document-requirements.*') || request()->routeIs('document-templates.*')">
                                     Kebutuhan Dokumen
+                                </x-nav-link>
+                            @endcan
+
+                            @can('create', \App\Models\TemplateVariable::class)
+                                <x-nav-link :href="route('template-variables.index')" :active="request()->routeIs('template-variables.*')">
+                                    Variabel Template
                                 </x-nav-link>
                             @endcan
 

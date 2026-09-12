@@ -199,5 +199,13 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   ProjectChecklistItem (status per project, idempotent). 66 test hijau,
   `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
   `PROJECT_DECISIONS.md` D-015.
-- **Phase 6 — Document Template: BERIKUTNYA.** Upload template DOCX,
-  deteksi placeholder/variable, versioning template.
+- **Phase 6 — Document Template: SELESAI.** TemplateVariable (master
+  data global untuk validasi placeholder), DocumentTemplate (versioning
+  per DocumentRequirement, satu versi Active pada satu waktu),
+  DocxPlaceholderScanner (scan `{{variable}}` di DOCX pakai ZipArchive
+  bawaan, tanpa dependency baru). 79 test hijau, `composer ci` lulus.
+  Detail: `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-016/D-017.
+- **Phase 7 — Document Generator: BERIKUTNYA.** Mengisi template dari
+  data project & menghasilkan DOCX/PDF sungguhan — di sinilah pemilihan
+  library generate (phpoffice/phpword atau alternatif) akhirnya
+  diputuskan dengan konteks penuh (lihat D-016).

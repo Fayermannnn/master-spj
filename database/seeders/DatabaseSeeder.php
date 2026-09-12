@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             TaxTypeSeeder::class,
             CostCategorySeeder::class,
             DocumentRequirementSeeder::class,
+            TemplateVariableSeeder::class,
             ReferenceProjectSeeder::class,
         ]);
     }

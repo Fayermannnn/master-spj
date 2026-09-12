@@ -50,6 +50,11 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <div class="flex justify-end gap-3">
+                                @can('viewAny', \App\Models\DocumentTemplate::class)
+                                    <a href="{{ route('document-templates.manage', $requirement) }}" wire:navigate class="text-slate-600 hover:underline">
+                                        Template
+                                    </a>
+                                @endcan
                                 @can('update', $requirement)
                                     <a href="{{ route('document-requirements.edit', $requirement) }}" wire:navigate class="text-blue-600 hover:underline">
                                         Ubah

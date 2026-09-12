@@ -3,18 +3,21 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\LogoutController;
+use App\Http\Controllers\DocumentTemplate\DownloadDocumentTemplateController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
 use App\Livewire\CostCategories;
 use App\Livewire\Dashboard;
 use App\Livewire\DocumentRequirements;
+use App\Livewire\DocumentTemplates;
 use App\Livewire\Organizations;
 use App\Livewire\Personnel;
 use App\Livewire\PersonnelCategories;
 use App\Livewire\Projects;
 use App\Livewire\ProjectTypes;
 use App\Livewire\TaxTypes;
+use App\Livewire\TemplateVariables;
 use App\Livewire\Users;
 use Illuminate\Support\Facades\Route;
 
@@ -73,4 +76,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/document-requirements', DocumentRequirements\Index::class)->name('document-requirements.index');
     Route::get('/document-requirements/create', DocumentRequirements\Form::class)->name('document-requirements.create');
     Route::get('/document-requirements/{documentRequirement}/edit', DocumentRequirements\Form::class)->name('document-requirements.edit');
+    Route::get('/document-requirements/{documentRequirement}/templates', DocumentTemplates\Manager::class)->name('document-templates.manage');
+
+    Route::get('/document-templates/{documentTemplate}/download', DownloadDocumentTemplateController::class)
+        ->name('document-templates.download');
+
+    Route::get('/template-variables', TemplateVariables\Index::class)->name('template-variables.index');
+    Route::get('/template-variables/create', TemplateVariables\Form::class)->name('template-variables.create');
+    Route::get('/template-variables/{templateVariable}/edit', TemplateVariables\Form::class)->name('template-variables.edit');
 });
