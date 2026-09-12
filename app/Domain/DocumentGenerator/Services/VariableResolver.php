@@ -55,7 +55,7 @@ class VariableResolver
      */
     public function reservedKeys(): array
     {
-        return ['document.number'];
+        return ['document.number', 'organization.logo'];
     }
 
     /**

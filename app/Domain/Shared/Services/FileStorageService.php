@@ -102,4 +102,17 @@ class FileStorageService
 
         return Storage::disk($disk)->download($path, $downloadName);
     }
+
+    /**
+     * Sama seperti `download()` (exists-check + 404 terkontrol), tapi
+     * `Content-Disposition: inline` — dipakai untuk pratinjau gambar
+     * langsung di halaman (mis. logo organisasi), bukan diunduh sebagai
+     * file terpisah.
+     */
+    public function inline(string $disk, string $path): StreamedResponse
+    {
+        abort_unless($this->exists($disk, $path), 404, 'Berkas tidak ditemukan di penyimpanan.');
+
+        return Storage::disk($disk)->response($path);
+    }
 }

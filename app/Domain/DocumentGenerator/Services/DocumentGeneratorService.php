@@ -86,6 +86,11 @@ class DocumentGeneratorService
             $scalarValues['document.number'] = $documentNumber ?? '';
         }
 
+        $needsLogo = in_array('organization.logo', $template->detected_variables ?? [], true);
+        $organizationLogoPath = $needsLogo && $project->organization?->logo_path !== null
+            ? Storage::disk((string) $project->organization->logo_disk)->path($project->organization->logo_path)
+            : null;
+
         $tables = $this->resolveApplicableTables($template, $project);
 
         $absoluteTemplatePath = Storage::disk($template->disk)->path($template->path);
@@ -99,6 +104,25 @@ class DocumentGeneratorService
 
             foreach ($scalarValues as $key => $value) {
                 $processor->setValue($key, $value);
+            }
+
+            // `organization.logo` adalah placeholder GAMBAR (RESERVED,
+            // lihat VariableResolver::reservedKeys()) — beda dari
+            // placeholder teks lain, diisi lewat `setImageValue()`
+            // bukan `setValue()`. Kalau organisasi belum mengunggah
+            // logo, dikosongkan (bukan dibiarkan jadi teks placeholder
+            // mentah di dokumen jadi) — lihat PROJECT_DECISIONS.md D-030.
+            if ($needsLogo) {
+                if ($organizationLogoPath !== null) {
+                    $processor->setImageValue('organization.logo', [
+                        'path' => $organizationLogoPath,
+                        'width' => 120,
+                        'height' => 60,
+                        'ratio' => true,
+                    ]);
+                } else {
+                    $processor->setValue('organization.logo', '');
+                }
             }
 
             foreach ($tables as $representativeKey => $rows) {

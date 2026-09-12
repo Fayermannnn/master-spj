@@ -110,8 +110,11 @@
 
                             @if (auth()->user()->organization !== null)
                                 @can('update', auth()->user()->organization)
-                                    <x-nav-link :href="route('settings.document-numbering')" :active="request()->routeIs('settings.*')">
+                                    <x-nav-link :href="route('settings.document-numbering')" :active="request()->routeIs('settings.document-numbering')">
                                         Penomoran Dokumen
+                                    </x-nav-link>
+                                    <x-nav-link :href="route('settings.letterhead')" :active="request()->routeIs('settings.letterhead')">
+                                        Kop Surat
                                     </x-nav-link>
                                 @endcan
                             @endif

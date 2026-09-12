@@ -8,6 +8,7 @@ use App\Domain\DocumentRequirement\Enums\ChecklistStatus;
 use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Identity\Enums\RoleName;
+use App\Domain\Organization\Services\OrganizationService;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Livewire\GeneratedDocuments\Manager;
 use App\Models\Contract;
@@ -22,6 +23,7 @@ use App\Models\Personnel;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -76,6 +78,37 @@ function generatorTemplateDocxBytes(): string
         '[Content_Types].xml',
         '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>'
     );
+    $zip->addFromString('word/document.xml', $documentXml);
+    $zip->addFromString('word/settings.xml', $settingsXml);
+    $zip->close();
+
+    $bytes = file_get_contents($path);
+    @unlink($path);
+
+    return $bytes;
+}
+
+/**
+ * Docx terpisah berisi HANYA placeholder `{{organization.logo}}` —
+ * `generatorTemplateDocxBytes()` sengaja TIDAK menyertakannya supaya
+ * test lain yang tidak mendaftarkan `organization.logo` di
+ * `detected_variables` tidak ikut kebocoran teks placeholder mentah ke
+ * hasil generate mereka.
+ */
+function logoPlaceholderDocxBytes(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'docx_logo_').'.docx';
+
+    $documentXml = '<?xml version="1.0"?>'
+        .'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+        .'<w:p><w:r><w:t>{{organization.logo}}</w:t></w:r></w:p>'
+        .'<w:p><w:r><w:t>Project: {{project.name}}</w:t></w:r></w:p>'
+        .'</w:body></w:document>';
+    $settingsXml = '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:settings>';
+
+    $zip = new ZipArchive;
+    $zip->open($path, ZipArchive::CREATE);
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
     $zip->addFromString('word/document.xml', $documentXml);
     $zip->addFromString('word/settings.xml', $settingsXml);
     $zip->close();
@@ -378,6 +411,56 @@ it('leaves the document number null when the organization has no numbering setti
     );
 
     expect($document->number)->toBeNull();
+});
+
+it('injects the organization logo as an image when the template detects the placeholder', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    Storage::disk($template->disk)->put($template->path, logoPlaceholderDocxBytes());
+    $template->update(['detected_variables' => ['organization.logo', 'project.name']]);
+    app(OrganizationService::class)->updateLogo(
+        $project->organization,
+        UploadedFile::fake()->image('logo.png'),
+    );
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+    );
+
+    $text = extractDocxText($document->disk, $document->path);
+    expect($text)->not->toContain('organization.logo');
+
+    $zip = new ZipArchive;
+    $zip->open(Storage::disk($document->disk)->path($document->path));
+    $mediaFiles = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $mediaFiles[] = $zip->getNameIndex($i);
+    }
+    $zip->close();
+
+    expect(collect($mediaFiles)->contains(fn (string $name): bool => str_starts_with($name, 'word/media/')))->toBeTrue();
+});
+
+it('leaves the logo placeholder blank when the organization has no logo uploaded', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    Storage::disk($template->disk)->put($template->path, logoPlaceholderDocxBytes());
+    $template->update(['detected_variables' => ['organization.logo', 'project.name']]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+    );
+
+    $text = extractDocxText($document->disk, $document->path);
+    expect($text)->not->toContain('organization.logo');
 });
 
 it('does not render document.number as an editable input in the generate form', function (): void {

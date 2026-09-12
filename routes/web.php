@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\DocumentTemplate\DownloadDocumentTemplateController;
 use App\Http\Controllers\Evidence\DownloadEvidenceController;
 use App\Http\Controllers\GeneratedDocument\DownloadGeneratedDocumentController;
+use App\Http\Controllers\Organization\ShowOrganizationLogoController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
 use App\Http\Controllers\Reports\DownloadProjectSummaryReportController;
 use App\Http\Controllers\Spj\ExportSpjPackageController;
@@ -111,4 +112,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/profile', Profile\Edit::class)->name('profile.edit');
 
     Route::get('/settings/document-numbering', Settings\DocumentNumbering::class)->name('settings.document-numbering');
+    Route::get('/settings/letterhead', Settings\Letterhead::class)->name('settings.letterhead');
+
+    Route::get('/organizations/{organization}/logo', ShowOrganizationLogoController::class)->name('organizations.logo');
 });

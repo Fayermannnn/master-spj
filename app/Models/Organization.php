@@ -16,7 +16,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * @domain Organization
  */
-#[Fillable(['code', 'name', 'npwp', 'address', 'phone', 'email', 'is_active'])]
+#[Fillable([
+    'code', 'name', 'npwp', 'address', 'phone', 'email', 'is_active',
+    'logo_disk', 'logo_path', 'logo_original_filename', 'logo_mime_type', 'logo_size',
+])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
@@ -46,5 +49,10 @@ class Organization extends Model
     public function numberingSetting(): HasOne
     {
         return $this->hasOne(NumberingSetting::class);
+    }
+
+    public function hasLogo(): bool
+    {
+        return $this->logo_path !== null;
     }
 }

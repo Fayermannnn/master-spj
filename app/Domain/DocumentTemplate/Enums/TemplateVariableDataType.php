@@ -16,6 +16,7 @@ enum TemplateVariableDataType: string
     case Boolean = 'boolean';
     case ArrayType = 'array';
     case Table = 'table';
+    case Image = 'image';
 
     public function label(): string
     {
@@ -27,6 +28,7 @@ enum TemplateVariableDataType: string
             self::Boolean => 'Ya/Tidak',
             self::ArrayType => 'Daftar (Array)',
             self::Table => 'Tabel',
+            self::Image => 'Gambar',
         };
     }
 }

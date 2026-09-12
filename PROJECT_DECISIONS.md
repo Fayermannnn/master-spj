@@ -1398,3 +1398,75 @@ penolakan role lain + 404 untuk user tanpa organisasi).
 **Hasil:** 192 test (12 baru), `composer ci` bersih. Ini fitur
 TERAKHIR dari 5 fitur yang diminta user — lihat PROJECT_HANDOVER.md
 untuk ringkasan keseluruhan.
+
+## D-030 — Kop Surat Otomatis + Batch Surat Administratif (SPPD/SPP/Slip Gaji/Invoice/Absensi)
+
+**Konteks:** Setelah 5 fitur di atas, user meminta batch fitur baru:
+kop surat otomatis (upload logo 1x, muncul di semua dokumen) dan
+beberapa jenis surat administratif dari awal sampai akhir pekerjaan
+(Surat Perjalanan Dinas, Surat Permintaan Pembayaran, Slip Gaji,
+kelengkapan Invoice, Absensi Tenaga Ahli). Riset lebih dulu (subagent)
+sebelum menulis kode — dikonfirmasi: sistem SUDAH punya engine generik
+DocumentRequirement+DocumentTemplate+DocumentGenerator (Phase 5-7)
+untuk ini, jadi sebagian besar "buat surat baru" = data (DocumentRequirement)
++ variable baru (VariableResolver), BUKAN kode khusus per jenis surat
+(RULE 1). Dikonfirmasi ke user via 2 pertanyaan sebelum eksekusi:
+Absensi cukup LEMBAR CETAK (bukan pencatatan digital), dan semua 4
+surat lain jadi prioritas sekaligus.
+
+### Kop Surat (letterhead)
+
+1. **Logo di-embed langsung di `organizations`** (kolom
+   `logo_disk/path/original_filename/mime_type/size`, pola sama
+   DocumentTemplate/Evidence) — BUKAN tabel terpisah, karena cuma SATU
+   logo per organisasi (bukan one-to-many).
+2. **`organization.logo` adalah placeholder GAMBAR, RESERVED** (masuk
+   `VariableResolver::reservedKeys()` bareng `document.number`) — diisi
+   `TemplateProcessor::setImageValue()`, BUKAN `setValue()` biasa.
+   Riset dulu mengonfirmasi `setMacroChars('{{','}}')` yang sudah
+   dipakai sistem ini KOMPATIBEL dengan `setImageValue()` (keduanya
+   baca `self::$macroOpeningChars`/`$macroClosingChars` yang sama,
+   phpoffice/phpword 1.4.0) — tidak perlu delimiter berbeda untuk
+   placeholder gambar.
+3. **Ukuran logo FIXED di kode** (120x60, `ratio: true`) — bukan
+   argumen inline `{{organization.logo:width=...}}` yang sebenarnya
+   didukung PHPWord, karena `DocxPlaceholderScanner`'s regex
+   (`[a-zA-Z0-9_.]+`, tidak ada `:`) TIDAK akan mendeteksi placeholder
+   dengan argumen colon sebagai satu variable yang valid — mengubah
+   regex scanner adalah utilitas bersama yang sensitif, di luar scope
+   (RULE 67).
+4. **Kalau organisasi belum upload logo**, placeholder dikosongkan
+   (`setValue('organization.logo', '')`), BUKAN dibiarkan jadi teks
+   mentah `{{organization.logo}}` di dokumen jadi — dan BUKAN
+   menggagalkan generate (fitur tetap opt-in seperti `document.number`).
+5. Halaman pengaturan self-service `/settings/letterhead`, pola SAMA
+   PERSIS `Settings\DocumentNumbering` (D-029) — reuse
+   `OrganizationPolicy::update`, tidak ada permission baru.
+6. **`FileStorageService::inline()` baru** (selain `download()` yang
+   sudah ada) — logo ditampilkan LANGSUNG di halaman (`<img src=...>`)
+   lewat `Storage::disk()->response()` (Content-Disposition: inline),
+   bukan dipaksa attachment/download seperti dokumen lain. Route
+   `organizations.logo` digerbangi `OrganizationPolicy::view` (bukan
+   `update`) — SELURUH anggota organisasi boleh melihat logo, HANYA
+   admin yang boleh menggantinya.
+
+### Surat administratif baru (SPPD/SPP/Slip Gaji/Invoice/Absensi)
+
+**BELUM DIKERJAKAN dalam commit ini** — lihat commit-commit berikutnya
+untuk masing-masing (satu commit per jenis surat, mengikuti pola 5
+fitur sebelumnya).
+
+**Verifikasi:** letterhead diverifikasi SEBAGIAN di browser — halaman
+`/settings/letterhead` render tanpa error dengan form upload yang
+benar, TAPI upload file sungguhan tidak bisa dites lewat automasi
+browser (keterbatasan keamanan browser: `<input type="file">` tidak
+bisa diisi programatik lewat JavaScript, beda dari kendala
+`wire:confirm` di D-028 tapi akar masalah sama — batas tooling
+verifikasi, bukan kode). 10 test baru mencakup penuh: simpan/ganti/
+hapus logo di service, upload/tolak-non-image lewat Livewire,
+otorisasi (staff ditolak, user tanpa organisasi 404), serve inline +
+scoping organisasi di controller, DAN injeksi gambar sungguhan ke
+DOCX hasil generate (diverifikasi lewat isi ZIP — ada file di
+`word/media/`, bukan cuma placeholder hilang dari teks).
+
+**Hasil:** 202 test (10 baru), `composer ci` bersih.
