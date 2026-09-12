@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Identity\Enums\RoleName;
 use App\Livewire\Users\Form;
+use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\User;
 use Livewire\Livewire;
@@ -38,6 +39,32 @@ it('lets admin perusahaan create a user scoped to their own organization', funct
     $created = User::query()->where('email', 'staff.baru@example.com')->firstOrFail();
     expect($created->organization_id)->toBe($organization->id);
     expect($created->hasRole(RoleName::Staff->value))->toBeTrue();
+});
+
+it('never writes the password hash into the audit log', function (): void {
+    $organization = seedOrganization();
+    $admin = seedAdminPerusahaan($organization);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('name', 'Staff Baru')
+        ->set('email', 'staff.rahasia@example.com')
+        ->set('password', 'password123')
+        ->set('password_confirmation', 'password123')
+        ->set('selectedRoles', [RoleName::Staff->value])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $created = User::query()->where('email', 'staff.rahasia@example.com')->firstOrFail();
+    $log = AuditLog::query()
+        ->where('auditable_type', $created->getMorphClass())
+        ->where('auditable_id', $created->id)
+        ->where('action', 'created')
+        ->firstOrFail();
+
+    expect($log->after)->not->toHaveKey('password');
+    expect($log->after)->not->toHaveKey('remember_token');
+    expect(json_encode($log->after))->not->toContain('password123');
 });
 
 it('cannot assign the super_admin role from a non super-admin session', function (): void {

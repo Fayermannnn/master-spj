@@ -48,6 +48,24 @@ class Manager extends Component
 
     public ?string $selectedPaymentId = null;
 
+    /**
+     * Cache per-render (BUKAN state Livewire — `private`, tidak
+     * disinkronkan lewat wire) supaya tab "Dokumen" tidak menjalankan
+     * 2 query tambahan PER checklist item (N+1 nyata yang ditemukan
+     * saat QA Phase 10 — `activeTemplateFor()`/`generatedDocumentsFor()`
+     * dipanggil sekali per baris di blade). `render()` mengisi kedua
+     * peta ini SEKALI dengan `whereIn`, method di bawah membaca dari
+     * cache ini kalau sudah terisi.
+     *
+     * @var array<string, DocumentTemplate>|null
+     */
+    private ?array $activeTemplatesByRequirement = null;
+
+    /**
+     * @var array<string, Collection<int, Document>>|null
+     */
+    private ?array $documentsByRequirement = null;
+
     public function mount(Project $project): void
     {
         $this->authorize('view', $project);
@@ -138,6 +156,10 @@ class Manager extends Component
 
     public function activeTemplateFor(string $requirementId): ?DocumentTemplate
     {
+        if ($this->activeTemplatesByRequirement !== null) {
+            return $this->activeTemplatesByRequirement[$requirementId] ?? null;
+        }
+
         return DocumentTemplate::query()
             ->where('document_requirement_id', $requirementId)
             ->where('status', TemplateStatus::Active->value)
@@ -149,6 +171,10 @@ class Manager extends Component
      */
     public function generatedDocumentsFor(string $requirementId): Collection
     {
+        if ($this->documentsByRequirement !== null) {
+            return $this->documentsByRequirement[$requirementId] ?? collect();
+        }
+
         return $this->project->documents()
             ->where('document_requirement_id', $requirementId)
             ->orderByDesc('version')
@@ -193,8 +219,26 @@ class Manager extends Component
 
     public function render(ChecklistService $checklistService): View
     {
+        $items = $checklistService->sync($this->project);
+        $requirementIds = $items->pluck('document_requirement_id');
+
+        $this->activeTemplatesByRequirement = DocumentTemplate::query()
+            ->whereIn('document_requirement_id', $requirementIds)
+            ->where('status', TemplateStatus::Active->value)
+            ->get()
+            ->keyBy('document_requirement_id')
+            ->all();
+
+        $this->documentsByRequirement = $this->project->documents()
+            ->whereIn('document_requirement_id', $requirementIds)
+            ->orderByDesc('version')
+            ->with('generatedBy')
+            ->get()
+            ->groupBy('document_requirement_id')
+            ->all();
+
         return view('livewire.generated-documents.manager', [
-            'items' => $checklistService->sync($this->project),
+            'items' => $items,
             'payments' => $this->project->payments,
         ]);
     }

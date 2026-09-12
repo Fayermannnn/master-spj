@@ -116,3 +116,15 @@ it('recomputes totals when a cost item is updated', function (): void {
 
     expect((float) $item->fresh()->total)->toBe(3_000_000.0);
 });
+
+it('prevents a member from another organization from managing costs on someone else\'s project', function (): void {
+    $organization = Organization::factory()->create();
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+
+    $otherOrganization = Organization::factory()->create();
+    $outsider = makeCostAdmin($otherOrganization);
+
+    Livewire::actingAs($outsider)
+        ->test(Manager::class, ['project' => $project])
+        ->assertForbidden();
+});

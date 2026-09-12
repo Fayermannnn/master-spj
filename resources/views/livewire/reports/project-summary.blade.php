@@ -36,12 +36,10 @@
         </div>
     </div>
 
-    @php $totals = $this->totals($rows); @endphp
-
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Jumlah Project</p>
-            <p class="mt-2 text-2xl font-semibold text-slate-900">{{ $rows->count() }}</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900">{{ $totals['count'] }}</p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Total Nilai Kontrak</p>
@@ -87,4 +85,6 @@
             </tbody>
         </table>
     </div>
+
+    {{ $rows->links() }}
 </div>

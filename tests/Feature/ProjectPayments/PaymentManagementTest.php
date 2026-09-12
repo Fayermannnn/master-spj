@@ -110,3 +110,16 @@ it('prevents two termin from sharing the same termin_number on one project', fun
         ->call('save')
         ->assertHasErrors(['termin_number']);
 });
+
+it('prevents a member from another organization from managing payments on someone else\'s project', function (): void {
+    $organization = Organization::factory()->create();
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    Payment::factory()->create(['project_id' => $project->id, 'termin_number' => 1]);
+
+    $otherOrganization = Organization::factory()->create();
+    $outsider = makePaymentAdmin($otherOrganization);
+
+    Livewire::actingAs($outsider)
+        ->test(Manager::class, ['project' => $project])
+        ->assertForbidden();
+});

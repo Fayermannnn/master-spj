@@ -689,3 +689,140 @@ implementasi yang tidak diminta eksplisit — tanpa report builder
 generik, tanpa chart library, tanpa dependency PDF baru, tanpa
 permission baru — memakai kembali sebanyak mungkin infrastruktur yang
 sudah terbukti dari fase-fase sebelumnya (RULE 67).
+
+## D-021 — Phase 10 QA: audit menyeluruh (security/performance/test/UX), fix nyata + keterbatasan yang didokumentasikan sengaja
+
+**Konteks:** Phase 10 (roadmap: "QA — test, security, performance, UX
+polish") adalah fase PENUTUP, bukan fase fitur — mengaudit 9 fase kode
+yang sudah terkumpul (~150 file). Dikonfirmasi ke user (AskUserQuestion)
+untuk memilih "audit menyeluruh" dibanding pass tertarget cepat. Skill
+`security-review` bawaan TIDAK bisa dipakai (berbasis `git diff
+origin/HEAD` — repo ini tidak punya remote sejak D-001), jadi audit
+dilakukan manual lewat 3 subagent riset paralel (security, performance,
+test coverage) + tinjauan UX langsung oleh sesi ini via browser.
+
+**Temuan & perbaikan (SEMUA diverifikasi lewat `composer ci` + browser,
+bukan cuma dibaca):**
+
+1. **[Security] Evidence menerima SEMUA jenis file** — `Evidence\Manager`
+   hanya validasi `required|file|max:10240`, TIDAK ADA `mimes:` — beda
+   dari `DocumentTemplates\Manager` (`mimes:docx`) dan
+   `Personnel\Documents` (`mimes:pdf,jpg,jpeg,png,doc,docx`) yang
+   sama-sama upload file di app ini. Diperbaiki: tambah
+   `mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx` (cakupan wajar untuk
+   "bukti pendukung" sesuai deskripsi domain Evidence).
+2. **[Security] Hash password bocor ke `audit_logs`** — `UserService`
+   mengirim `$user->getAttributes()`/`getChanges()` APA ADANYA ke
+   `AuditLogService::record()` pada create/update/delete, termasuk
+   kolom `password` (hash bcrypt) dan `remember_token`. `audit_logs`
+   append-only dan bisa dibaca admin manapun yang berhak — hash tidak
+   boleh ada di sana sama sekali (menambah permukaan serangan offline
+   cracking kalau tabel ini pernah diekspos ke audiens admin yang lebih
+   luas). Diperbaiki: `UserService::redact()` membuang `password`/
+   `remember_token` sebelum dikirim ke audit log, di ketiga method
+   (create/update/delete).
+3. **[Performance] N+1 nyata di tab "Dokumen"** — `GeneratedDocuments\Manager`
+   memanggil `activeTemplateFor()`/`generatedDocumentsFor()` (masing-
+   masing 1 query) PER checklist item di dalam loop Blade — ~30-45
+   query tambahan per render untuk project dengan ~15 requirement.
+   Diperbaiki: `render()` membangun 2 peta (`whereIn` sekali) yang
+   dicache di property PRIVATE (bukan state Livewire — tidak
+   disinkronkan lewat wire, murni cache per-render), method publik
+   membaca dari cache itu kalau sudah terisi.
+4. **[Performance] Laporan Ringkasan Project tidak dipaginasi** — beda
+   dari SEMUA halaman Index lain di app ini (Projects/Clients/Personnel/
+   dst semua pakai `WithPagination`), `Reports\ProjectSummary` memuat
+   SEMUA project yang cocok filter sekaligus, masing-masing lewat
+   `ChecklistService::sync()` (mahal, lihat poin 5) — tumbuh O(project)
+   tanpa batas. Diperbaiki: tabel di layar dipaginasi 15/halaman
+   (`paginatedRows()`, `->through($service->toRow(...))`), TAPI kartu
+   total (jumlah project/nilai kontrak/total dibayar) TETAP mencerminkan
+   SELURUH hasil filter lewat method baru `aggregates()` yang memakai
+   SQL `sum()` langsung (JOIN ke `contracts`/`payments`, tanpa
+   `toRow()`/`sync()` sama sekali) — jadi murah dihitung berapa pun
+   jumlah project yang cocok filter, sementara tabel detail tetap
+   dibatasi per halaman. Ekspor Excel/PDF TETAP memakai `rows()` yang
+   tidak dipaginasi (sengaja — unduhan harus berisi SEMUA baris yang
+   cocok filter, bukan cuma satu halaman).
+5. **[Performance] `ChecklistService::sync()` mahal, TIDAK diperbaiki
+   (sengaja)** — audit performa menemukan tiap panggilan mengevaluasi
+   ulang query yang identik untuk field rule yang sama di requirement
+   berbeda (mis. beberapa requirement sama-sama punya rule
+   `has_payments`) untuk project yang sama — sekitar 16 query per
+   `sync()` untuk project dengan 15 requirement/10 rule aktif. SEMPAT
+   dicoba perbaikan (memoize `RequirementRuleEvaluator::resolveFieldValue()`
+   per instance), TAPI DIBATALKAN — `tests/Unit/DocumentRequirement/RequirementRuleEvaluatorTest.php`
+   sengaja memanggil `passes()` berulang pada evaluator+project yang
+   SAMA dengan DATA YANG BERUBAH di antaranya (mis. tambah
+   PersonnelAssignment lalu evaluasi ulang, mengharapkan hasil
+   berbeda) — pola yang sah dan bisa terjadi di alur nyata juga (data
+   project berubah lalu checklist dievaluasi ulang dalam request yang
+   sama). Cache per-instance mengembalikan hasil BASI pada kasus itu —
+   4 test langsung gagal, membuktikan ini BUG KOREKTNES nyata, bukan
+   cuma soal test yang perlu disesuaikan. **Dibiarkan tidak
+   dioptimasi** — RULE 67 (jangan over-engineer demi masalah skala yang
+   masih spekulatif; app ini realistis dipakai puluhan project per
+   organisasi, bukan ribuan) lebih diutamakan daripada resiko bug
+   silent-stale-data. Kalau skala nyata membuktikan ini bottleneck
+   sungguhan di masa depan, perbaikan yang benar adalah memindahkan
+   cache ke LEVEL BATCH (`ChecklistService::applicableRequirements()`
+   menghitung semua field SEKALI di awal sebelum loop rule), bukan
+   cache tersembunyi di evaluator.
+6. **[UX] Bug overflow horizontal di SELURUH halaman pada mobile** — BUKAN
+   di tab nav seperti dugaan awal (nav sendiri sudah benar), tapi
+   classic flexbox trap: `<main>` adalah flex item (`flex-1`) dari
+   container `flex-col` di `layouts/app.blade.php`, dan flex item
+   defaultnya `min-width: auto` (tidak pernah menyusut di bawah lebar
+   konten instrinsiknya). Nama project yang panjang di judul header
+   sticky memaksa SELURUH halaman melebar mengikuti flex item terlebar,
+   bukan wrapping/truncate. Diperbaiki: `min-w-0` pada `<main>` dan
+   div flex-col pembungkusnya, `truncate` + `min-w-0` pada `<h1>` judul
+   header. **Ditemukan & diverifikasi lewat browser sungguhan
+   (viewport mobile 375px), bukan cuma baca kode** — dan sempat
+   "gagal" berkali-kali sebelum ketahuan bahwa `npm run build` belum
+   pernah dijalankan ulang setelah tiap perubahan class Tailwind (tidak
+   ada proses Vite dev yang watch di `.claude/launch.json`, hanya
+   `php artisan serve`) — pelajaran: SETIAP perubahan class Tailwind di
+   sesi ini butuh `npm run build` manual sebelum diverifikasi di
+   browser, beda dari perubahan PHP/Blade logic yang langsung
+   ter-refresh.
+7. **[Test] Bug nyata ditemukan lewat MENULIS test, bukan membaca kode**
+   — `tests/Feature/Contracts/` tidak ada SAMA SEKALI sebelum QA
+   (domain Contract, sejak Phase 2, nol test). Saat menulis test
+   pertama untuk domain ini, `ContractService::save()` GAGAL di level
+   database (`SQLSTATE[22007]: invalid input syntax for type date: ""`)
+   ketika field opsional (`spmk_number`/`spmk_date`/`tax_amount`/
+   `net_value`/`notes`) dibiarkan kosong — `Contracts\Form::save()`
+   HANYA mengonversi `tax_type_id` dari string kosong ke `null` sebelum
+   dikirim ke service, field opsional lain TIDAK — bug produksi nyata
+   (user mengisi form kontrak tanpa nomor SPMK akan mengalami 500).
+   Diperbaiki: `save()` sekarang mengonversi SEMUA field nullable dari
+   `''` ke `null` secara seragam sebelum dikirim ke `ContractService`.
+8. **[Test] Cross-organization authorization TIDAK PERNAH diverifikasi**
+   untuk 3 domain yang sengaja tanpa Policy sendiri (D-014: Payment,
+   CostItem, PersonnelAssignment — digerbangi `ProjectPolicy::update`).
+   Klaim D-014 hanya diuji lewat jalur same-org happy-path sejak
+   ditulis. Ditambahkan test hostile-org untuk ketiganya — SEMUA lolos
+   (klaim D-014 terbukti benar), tapi sebelumnya memang tidak
+   dibuktikan sama sekali. Juga ditambahkan: test denial `ClientPolicy`
+   (satu-satunya Policy tanpa test jalur ditolak), test file-type/size
+   rejection + akses pasca-hapus untuk Evidence, dan test bahwa hash
+   password tidak pernah muncul di `audit_logs` (memverifikasi
+   perbaikan poin 2).
+9. **Tidak diperbaiki (dicatat, bukan diabaikan)** — dari audit test
+   coverage: enum status lain (`ChecklistStatus`/`SpjPackageStatus`/
+   `TemplateStatus`/`WorkplanStatus`) belum diuji jalur transisi
+   tidak-valid; beberapa service (`VariableResolver`,
+   `EvidenceService`, dst) hanya teruji TIDAK LANGSUNG lewat komponen
+   Livewire-nya (dianggap cukup — bukan celah, sesuai audit); file
+   generate/export (`GeneratedDocuments`/`SpjPackages`/`Reports`) belum
+   diuji untuk kasus file sumber hilang dari disk pasca soft-delete.
+   Ditinggalkan sebagai backlog QA lanjutan, bukan diperbaiki paksa
+   dalam satu fase yang sudah menyentuh banyak domain sekaligus
+   (RULE 67 — hindari scope creep tak berujung dalam satu fase).
+
+**Hasil akhir:** 123 test (13 baru), `composer ci` bersih. Tidak ada
+temuan security KRITIS (tidak ada path traversal/SQLi/XSS/command
+injection/IDOR/mass-assignment nyata — semua kategori itu "No issue
+found" di audit) — dua temuan yang ada (MIME Evidence, password di
+audit log) bersifat hardening, sudah diperbaiki.

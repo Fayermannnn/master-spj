@@ -25,7 +25,7 @@ class Manager extends Component
 
     public Project $project;
 
-    #[Validate('required|file|max:10240')]
+    #[Validate('required|file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:10240')]
     public mixed $file = null;
 
     #[Validate('required|string|max:255')]
@@ -55,7 +55,7 @@ class Manager extends Component
         $this->authorize('update', $this->project);
 
         $this->validate([
-            'file' => 'required|file|max:10240',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:10240',
             'name' => 'required|string|max:255',
             'category' => 'nullable|string|max:100',
             'description' => 'nullable|string|max:1000',

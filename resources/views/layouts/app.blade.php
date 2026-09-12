@@ -120,13 +120,13 @@
                 class="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
             ></div>
 
-            <div class="flex min-h-screen flex-1 flex-col lg:pl-64">
+            <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-64">
                 {{-- Topbar --}}
                 <header class="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
-                    <div class="flex items-center gap-3">
+                    <div class="flex min-w-0 items-center gap-3">
                         <button
                             @click="sidebarOpen = !sidebarOpen"
-                            class="rounded p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+                            class="shrink-0 rounded p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
                             aria-label="Buka menu"
                         >
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -135,11 +135,11 @@
                         </button>
 
                         @isset($title)
-                            <h1 class="text-base font-semibold text-slate-900">{{ $title }}</h1>
+                            <h1 class="min-w-0 truncate text-base font-semibold text-slate-900">{{ $title }}</h1>
                         @endisset
                     </div>
 
-                    <div class="flex items-center gap-3">
+                    <div class="flex shrink-0 items-center gap-3">
                         @auth
                             <div class="hidden text-right sm:block">
                                 <p class="text-sm font-medium text-slate-900">{{ auth()->user()->name }}</p>
@@ -176,7 +176,7 @@
                     </div>
                 @endif
 
-                <main class="flex-1 px-4 py-6 sm:px-6">
+                <main class="min-w-0 flex-1 px-4 py-6 sm:px-6">
                     @if (session('status'))
                         <div class="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                             {{ session('status') }}

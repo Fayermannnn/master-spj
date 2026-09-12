@@ -91,6 +91,59 @@ it('prevents a member from another organization from uploading evidence', functi
         ->assertForbidden();
 });
 
+it('rejects a file type that is not in the allowed list', function (): void {
+    Storage::fake('local');
+
+    [$user, $project] = makeEvidenceProjectAdmin();
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->set('name', 'Bukti Berbahaya')
+        ->set('file', UploadedFile::fake()->create('bukti.exe', 100, 'application/x-msdownload'))
+        ->call('upload')
+        ->assertHasErrors(['file']);
+
+    expect(Evidence::query()->where('project_id', $project->id)->count())->toBe(0);
+});
+
+it('rejects a file larger than the configured size limit', function (): void {
+    Storage::fake('local');
+
+    [$user, $project] = makeEvidenceProjectAdmin();
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->set('name', 'Bukti Terlalu Besar')
+        ->set('file', UploadedFile::fake()->create('bukti.pdf', 10241, 'application/pdf'))
+        ->call('upload')
+        ->assertHasErrors(['file']);
+
+    expect(Evidence::query()->where('project_id', $project->id)->count())->toBe(0);
+});
+
+it('returns a 404 when downloading evidence that has already been deleted', function (): void {
+    Storage::fake('local');
+
+    [$user, $project] = makeEvidenceProjectAdmin();
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->set('name', 'Bukti')
+        ->set('file', UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf'))
+        ->call('upload');
+
+    $evidence = Evidence::query()->where('project_id', $project->id)->firstOrFail();
+    $evidenceId = $evidence->id;
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('deleteEvidence', $evidenceId);
+
+    $this->actingAs($user)
+        ->get(route('evidences.download', $evidenceId))
+        ->assertNotFound();
+});
+
 it('blocks downloading evidence for a user outside the owning organization', function (): void {
     Storage::fake('local');
 

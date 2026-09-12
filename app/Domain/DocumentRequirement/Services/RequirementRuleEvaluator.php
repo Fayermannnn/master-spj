@@ -18,6 +18,21 @@ use Illuminate\Support\Collection;
  * RequirementRuleField, tidak ada reflection/dot-path bebas ke model.
  * Semua rule aktif pada satu requirement digabung dengan AND; requirement
  * tanpa rule aktif dianggap selalu berlaku.
+ *
+ * SENGAJA TIDAK memoize `resolveFieldValue()` walau
+ * `ChecklistService::applicableRequirements()` bisa memanggilnya
+ * berulang dengan field yang sama untuk project yang sama — dicoba saat
+ * audit performa Phase 10 (D-021) tapi DIBATALKAN karena
+ * `tests/Unit/DocumentRequirement/RequirementRuleEvaluatorTest.php`
+ * sengaja memanggil `passes()` berulang pada evaluator+project YANG SAMA
+ * dengan DATA YANG BERUBAH di antaranya (mis. tambah PersonnelAssignment
+ * lalu evaluasi ulang) — pola yang sah dan bisa terjadi di alur nyata
+ * juga (data project berubah lalu checklist dievaluasi ulang dalam
+ * request yang sama). Cache per-instance akan mengembalikan hasil BASI
+ * pada kasus itu — bug korektnes nyata, bukan cuma soal test. Dibiarkan
+ * TIDAK dioptimasi; lihat PROJECT_DECISIONS.md D-021 untuk alasan
+ * lengkap kenapa ini didokumentasikan sebagai keterbatasan yang diterima,
+ * bukan diperbaiki paksa.
  */
 class RequirementRuleEvaluator
 {

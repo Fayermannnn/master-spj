@@ -82,6 +82,18 @@ it('prevents admin perusahaan from creating a client under another organization 
     expect($client->organization_id)->toBe($ownOrganization->id);
 });
 
+it('prevents a member from another organization from opening the edit form for someone else\'s client', function (): void {
+    $organization = Organization::factory()->create();
+    $client = Client::factory()->create(['organization_id' => $organization->id]);
+
+    $otherOrganization = Organization::factory()->create();
+    $outsider = makeAdminForOrg($otherOrganization);
+
+    Livewire::actingAs($outsider)
+        ->test(Form::class, ['client' => $client])
+        ->assertForbidden();
+});
+
 it('blocks deleting a client that still has projects', function (): void {
     $organization = Organization::factory()->create();
     $client = Client::factory()->create(['organization_id' => $organization->id]);

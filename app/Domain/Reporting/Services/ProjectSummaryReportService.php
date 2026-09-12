@@ -7,6 +7,8 @@ namespace App\Domain\Reporting\Services;
 use App\Domain\DocumentRequirement\Enums\ChecklistStatus;
 use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\Payment\Enums\PaymentStatus;
+use App\Models\Contract;
+use App\Models\Payment;
 use App\Models\Project;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -33,9 +35,31 @@ class ProjectSummaryReportService
     }
 
     /**
+     * Total agregat lintas SEMUA project yang cocok dengan filter — lewat
+     * SQL `sum()` langsung, BUKAN membangun tiap baris via `toRow()`
+     * (yang memanggil `ChecklistService::sync()`, mahal — lihat
+     * PROJECT_DECISIONS.md D-021). Dipakai untuk kartu ringkasan di
+     * layar supaya angkanya tetap benar (seluruh hasil filter) walau
+     * tabel di bawahnya dipaginasi.
+     *
+     * @param  array{organization_id: ?string, search: string, status: string, client_id: string}  $filters
+     * @return array{count: int, contract_value: float, total_paid: float}
+     */
+    public function aggregates(array $filters): array
+    {
+        $projectIds = $this->query($filters)->pluck('id');
+
+        return [
+            'count' => $projectIds->count(),
+            'contract_value' => (float) Contract::query()->whereIn('project_id', $projectIds)->sum('contract_value'),
+            'total_paid' => (float) Payment::query()->whereIn('project_id', $projectIds)->where('status', PaymentStatus::Paid->value)->sum('amount'),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function toRow(Project $project): array
+    public function toRow(Project $project): array
     {
         $checklistItems = $this->checklistService->sync($project);
         $total = $checklistItems->count();

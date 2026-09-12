@@ -94,3 +94,15 @@ it('recomputes the subtotal when an assignment is updated', function (): void {
 
     expect((float) $assignment->fresh()->subtotal)->toBe(30_000_000.0);
 });
+
+it('prevents a member from another organization from managing assignments on someone else\'s project', function (): void {
+    $organization = Organization::factory()->create();
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+
+    $otherOrganization = Organization::factory()->create();
+    $outsider = makeAssignmentAdmin($otherOrganization);
+
+    Livewire::actingAs($outsider)
+        ->test(Manager::class, ['project' => $project])
+        ->assertForbidden();
+});

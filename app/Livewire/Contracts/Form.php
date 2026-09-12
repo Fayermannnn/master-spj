@@ -116,7 +116,10 @@ class Form extends Component
         $this->authorize('update', $this->project);
 
         $data = $this->validate();
-        $data['tax_type_id'] = $data['tax_type_id'] ?: null;
+
+        foreach (['spmk_number', 'spmk_date', 'tax_type_id', 'tax_amount', 'net_value', 'notes'] as $nullableField) {
+            $data[$nullableField] = $data[$nullableField] !== '' ? $data[$nullableField] : null;
+        }
 
         $service->save($this->project, $data);
 

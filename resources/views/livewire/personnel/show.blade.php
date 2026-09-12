@@ -25,8 +25,8 @@
         </div>
     </div>
 
-    <div class="border-b border-slate-200">
-        <nav class="-mb-px flex gap-6 text-sm">
+    <div class="overflow-x-auto border-b border-slate-200">
+        <nav class="-mb-px flex w-max min-w-full gap-6 text-sm">
             <button
                 type="button"
                 wire:click="setTab('overview')"

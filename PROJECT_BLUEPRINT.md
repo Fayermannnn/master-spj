@@ -254,3 +254,26 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   diperiksa lewat DOM, unduh Excel & PDF asli diperiksa header/isi).
   110 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
   `PROJECT_DECISIONS.md` D-020.
+- **Phase 10 — QA: SELESAI.** Audit menyeluruh (security/performance/
+  test coverage lewat 3 subagent riset paralel + tinjauan UX manual di
+  browser) atas 9 fase kode terkumpul — bukan fase fitur baru. Temuan &
+  perbaikan nyata: mimes upload Evidence yang hilang, hash password
+  bocor ke `audit_logs` (diredaksi), N+1 nyata di tab Dokumen
+  (diperbaiki lewat cache per-render), Laporan Ringkasan Project yang
+  tidak dipaginasi (diperbaiki, agregat kartu tetap akurat lewat SQL
+  `sum()` terpisah dari tabel yang dipaginasi), bug overflow horizontal
+  mobile di SELURUH halaman (classic flexbox `min-width:auto` trap di
+  `<main>`), bug produksi nyata di form Kontrak (field opsional kosong
+  bikin 500 — ditemukan lewat MENULIS test pertama untuk domain yang
+  0 test sejak Phase 2), dan cross-organization authorization yang
+  belum pernah diverifikasi untuk 3 domain sejak D-014. Satu optimasi
+  (memoize evaluator rule) SEMPAT dicoba lalu DIBATALKAN karena
+  terbukti jadi bug korektnes lewat test yang gagal — didokumentasikan
+  sebagai keterbatasan yang diterima, bukan dipaksakan. Tidak ada
+  temuan security kritis (path traversal/SQLi/XSS/IDOR/command
+  injection semua "No issue found"). 123 test hijau (13 baru),
+  `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-021.
+
+**Dengan ini seluruh 10 fase roadmap awal (§9) SELESAI — MVP Sistem SPJ
+Otomatis lengkap dari Foundation sampai QA.**

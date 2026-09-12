@@ -13,7 +13,7 @@
             </div>
 
             <div>
-                <label class="mb-1 block text-xs font-medium text-slate-500">File (maks 10MB)</label>
+                <label class="mb-1 block text-xs font-medium text-slate-500">File (PDF/JPG/PNG/DOC/XLS, maks 10MB)</label>
                 <input type="file" wire:model="file" class="block w-full text-sm">
                 @error('file') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                 <div wire:loading wire:target="file" class="mt-1 text-xs text-slate-400">Mengunggah…</div>
