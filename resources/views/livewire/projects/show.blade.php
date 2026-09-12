@@ -70,6 +70,20 @@
             >
                 Personel
             </button>
+            <button
+                type="button"
+                wire:click="setTab('cost')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'cost' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Biaya
+            </button>
+            <button
+                type="button"
+                wire:click="setTab('payments')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Termin
+            </button>
         </nav>
     </div>
 
@@ -104,7 +118,11 @@
         </div>
     @elseif ($activeTab === 'contract')
         <livewire:contracts.form :project="$project" :key="'contract-'.$project->id" />
-    @else
+    @elseif ($activeTab === 'personnel')
         <livewire:project-personnel.manager :project="$project" :key="'personnel-'.$project->id" />
+    @elseif ($activeTab === 'cost')
+        <livewire:project-cost.manager :project="$project" :key="'cost-'.$project->id" />
+    @else
+        <livewire:project-payments.manager :project="$project" :key="'payments-'.$project->id" />
     @endif
 </div>

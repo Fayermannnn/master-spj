@@ -186,7 +186,13 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   (FK opsional mendampingi kolom string lama). 38 test hijau,
   `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
   `PROJECT_DECISIONS.md` D-011/D-012.
-- **Phase 4 — Cost & Payment: BERIKUTNYA.** Cost category/item, budget,
-  payment/termin. Ingat: Tax Type/Tax Rate configurable (§59 master
-  prompt) ditunda ke fase ini — lihat catatan di `PROJECT_HANDOVER.md`
-  Phase 2.
+- **Phase 4 — Cost & Payment: SELESAI.** TaxType (master data global,
+  §59), CostCategory + CostItem (perhitungan subtotal/pajak/total
+  otomatis, inclusive/exclusive), Payment/Termin (status siklus +
+  validasi tidak melebihi nilai kontrak kecuali override eksplisit —
+  §57 master prompt). 53 test hijau, `composer ci` lulus. Detail:
+  `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-013/D-014.
+- **Phase 5 — Document Requirement: BERIKUTNYA.** Document Requirement
+  Engine berbasis rule (§17-18 master prompt) — ini fase paling teknis
+  berikutnya, mulai dengan desain skema rule sederhana dulu sebelum
+  coding.

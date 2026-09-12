@@ -46,4 +46,7 @@ enum PermissionName: string
     case PersonnelDelete = 'personnel.delete';
 
     case PersonnelAssignmentsManage = 'personnel_assignments.manage';
+
+    case TaxTypesManage = 'tax_types.manage';
+    case CostCategoriesManage = 'cost_categories.manage';
 }

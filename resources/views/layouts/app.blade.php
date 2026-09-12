@@ -76,6 +76,18 @@
                                 </x-nav-link>
                             @endcan
 
+                            @can('create', \App\Models\CostCategory::class)
+                                <x-nav-link :href="route('cost-categories.index')" :active="request()->routeIs('cost-categories.*')">
+                                    Kategori Biaya
+                                </x-nav-link>
+                            @endcan
+
+                            @can('create', \App\Models\TaxType::class)
+                                <x-nav-link :href="route('tax-types.index')" :active="request()->routeIs('tax-types.*')">
+                                    Jenis Pajak
+                                </x-nav-link>
+                            @endcan
+
                             <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                                 Pengguna
                             </x-nav-link>

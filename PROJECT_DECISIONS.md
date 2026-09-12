@@ -255,3 +255,53 @@ inferensi otomatis dari nama kolom.
 **Alasan:** Bug nyata (bukan gaya penulisan) — tanpa ini, foreign key
 migrasi gagal total dan analisis statis tidak dapat memverifikasi kode
 yang menyentuh model ini sama sekali.
+
+## D-013 — Tax Type configurable; Contract.tax_type_id sebagai default, bukan sumber kebenaran yang dipaksakan
+
+**Konteks:** §59 master prompt meminta Tax Type/Tax Rate configurable,
+ditunda dari Phase 2 (lihat catatan di `PROJECT_HANDOVER.md` Phase 2).
+Perlu diputuskan apakah `contracts.tax_amount`/`net_value` (kolom manual
+sejak Phase 2) diganti sepenuhnya oleh perhitungan dari Tax Type.
+
+**Keputusan:** `tax_types` sebagai master data GLOBAL (pola sama dengan
+ProjectType/PersonnelCategory/CostCategory — D-009/D-011). Kolom
+`contracts.tax_type_id` (nullable) ditambahkan sebagai ADDITIVE — ketika
+dipilih di form, `tax_amount`/`net_value` diisi otomatis sebagai
+**default/starting point** (asumsi nilai kontrak bersifat tax-inclusive,
+konsisten dengan cara `ReferenceProjectSeeder` menghitung), tapi kedua
+kolom itu TETAP bisa diedit manual sesudahnya — tidak divalidasi harus
+persis sama dengan hasil hitung otomatis.
+
+**Keputusan serupa untuk CostItem:** `cost_items.tax_type_id` (nullable)
++ `is_tax_inclusive` (boolean) menentukan arah kalkulasi
+(`CostItemService::applyCalculation()`): tidak ada tax_type → tidak kena
+pajak; ada tax_type + exclusive → pajak ditambahkan di atas harga; ada
+tax_type + inclusive → pajak diekstrak dari harga yang sudah termasuk
+pajak. `subtotal`/`tax_amount`/`total` disimpan sebagai snapshot hasil
+hitung (bukan dihitung ulang saat tampil), konsisten dengan prinsip
+"Data Snapshot" §62 master prompt.
+
+**Alasan:** §60 master prompt eksplisit: sistem "mengotomatisasi
+berdasarkan rule/template yang dikonfigurasi", bukan alat kepatuhan
+pajak. Memaksa tax_amount mengikuti Tax Type secara ketat akan
+bertentangan dengan itu — user tetap harus bisa override untuk kasus
+nyata yang tidak persis mengikuti rumus sederhana (potongan pajak
+majemuk, pembulatan sesuai faktur pajak asli, dst).
+
+## D-014 — Payment tidak punya organization_id sendiri
+
+**Konteks:** Perlu diputuskan apakah tabel `payments` (termin) butuh
+kolom `organization_id` sendiri untuk RBAC scoping, seperti `clients`/
+`projects`/`personnel`.
+
+**Keputusan:** Tidak. `payments.project_id` sudah cukup — scoping
+organisasi diturunkan dari `project.organization_id` (lewat
+`ProjectPolicy::update` yang menjadi gerbang akses satu-satunya untuk
+Payment, sama seperti Contract/CostItem/PersonnelAssignment — tidak ada
+Policy terpisah untuk keempatnya).
+
+**Alasan:** Menghindari duplikasi kolom scoping yang bisa jadi tidak
+sinkron (mis. kalau project dipindah organisasi — meski itu sendiri
+belum didukung — kolom organization_id di Payment bisa basi). Satu
+sumber kebenaran (project) lebih aman daripada dua kolom yang harus
+selalu dijaga konsisten.

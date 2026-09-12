@@ -6,12 +6,14 @@ use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Personnel\DownloadPersonnelDocumentController;
 use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
+use App\Livewire\CostCategories;
 use App\Livewire\Dashboard;
 use App\Livewire\Organizations;
 use App\Livewire\Personnel;
 use App\Livewire\PersonnelCategories;
 use App\Livewire\Projects;
 use App\Livewire\ProjectTypes;
+use App\Livewire\TaxTypes;
 use App\Livewire\Users;
 use Illuminate\Support\Facades\Route;
 
@@ -58,4 +60,12 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/personnel-documents/{personnelDocument}/download', DownloadPersonnelDocumentController::class)
         ->name('personnel-documents.download');
+
+    Route::get('/tax-types', TaxTypes\Index::class)->name('tax-types.index');
+    Route::get('/tax-types/create', TaxTypes\Form::class)->name('tax-types.create');
+    Route::get('/tax-types/{taxType}/edit', TaxTypes\Form::class)->name('tax-types.edit');
+
+    Route::get('/cost-categories', CostCategories\Index::class)->name('cost-categories.index');
+    Route::get('/cost-categories/create', CostCategories\Form::class)->name('cost-categories.create');
+    Route::get('/cost-categories/{costCategory}/edit', CostCategories\Form::class)->name('cost-categories.edit');
 });

@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Domain\Client\Enums\ContactType;
+use App\Domain\Payment\Enums\PaymentStatus;
 use App\Domain\ProjectManagement\Enums\ProjectStatus;
 use App\Models\Client;
 use App\Models\Contact;
 use App\Models\Contract;
+use App\Models\CostCategory;
 use App\Models\Organization;
 use App\Models\Personnel;
 use App\Models\PersonnelCategory;
 use App\Models\Project;
 use App\Models\ProjectType;
+use App\Models\TaxType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -67,6 +70,8 @@ class ReferenceProjectSeeder extends Seeder
             ]
         );
 
+        $ppn = TaxType::query()->where('code', 'PPN')->firstOrFail();
+
         Contract::query()->firstOrCreate(
             ['project_id' => $project->id],
             [
@@ -75,6 +80,7 @@ class ReferenceProjectSeeder extends Seeder
                 'spmk_number' => '028/SPMK/RSPNDD/2026',
                 'spmk_date' => $startDate,
                 'contract_value' => 1_980_610_920.00,
+                'tax_type_id' => $ppn->id,
                 'tax_amount' => round(1_980_610_920.00 * 11 / 111, 2),
                 'net_value' => round(1_980_610_920.00 * 100 / 111, 2),
                 'notes' => 'Reference/sample project — lihat PROJECT_BLUEPRINT.md §3.',
@@ -82,6 +88,7 @@ class ReferenceProjectSeeder extends Seeder
         );
 
         $this->seedPersonnel($organization, $project);
+        $this->seedCostAndPayment($project);
     }
 
     /**
@@ -136,6 +143,53 @@ class ReferenceProjectSeeder extends Seeder
                 'unit' => 'OB',
                 'unit_price' => $ahliArsitektur->default_rate,
                 'subtotal' => 3 * (float) $ahliArsitektur->default_rate,
+            ]
+        );
+    }
+
+    private function seedCostAndPayment(Project $project): void
+    {
+        $travel = CostCategory::query()->where('code', 'TRAVEL')->firstOrFail();
+        $printing = CostCategory::query()->where('code', 'PRINTING')->firstOrFail();
+
+        $project->costItems()->firstOrCreate(
+            ['project_id' => $project->id, 'description' => 'Perjalanan Survey Lapangan ke Mahakam Ulu'],
+            [
+                'cost_category_id' => $travel->id,
+                'quantity' => 2,
+                'unit' => 'Paket',
+                'unit_price' => 15_000_000,
+                'is_tax_inclusive' => false,
+                'subtotal' => 30_000_000,
+                'tax_amount' => 0,
+                'total' => 30_000_000,
+            ]
+        );
+
+        $project->costItems()->firstOrCreate(
+            ['project_id' => $project->id, 'description' => 'Pencetakan & Penjilidan Laporan'],
+            [
+                'cost_category_id' => $printing->id,
+                'quantity' => 10,
+                'unit' => 'Set',
+                'unit_price' => 350_000,
+                'is_tax_inclusive' => false,
+                'subtotal' => 3_500_000,
+                'tax_amount' => 0,
+                'total' => 3_500_000,
+            ]
+        );
+
+        $project->payments()->firstOrCreate(
+            ['project_id' => $project->id, 'termin_number' => 1],
+            [
+                'name' => 'Termin 1 (Uang Muka)',
+                'percentage' => 20,
+                'amount' => round(1_980_610_920.00 * 0.20, 2),
+                'target_date' => $project->start_date?->clone()->addDays(14),
+                'trigger' => 'Penandatanganan kontrak & penyerahan jaminan uang muka',
+                'required_items' => 'Invoice, Kwitansi, Faktur Pajak, Jaminan Uang Muka',
+                'status' => PaymentStatus::Pending->value,
             ]
         );
     }

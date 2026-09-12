@@ -42,6 +42,19 @@
             </div>
 
             <div>
+                <label for="tax_type_id" class="mb-1 block text-sm font-medium text-slate-700">Jenis Pajak</label>
+                <select wire:model.live="tax_type_id" id="tax_type_id" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">— Tidak kena pajak —</option>
+                    @foreach ($taxTypeOptions as $tax)
+                        <option value="{{ $tax->id }}">{{ $tax->name }} ({{ rtrim(rtrim($tax->rate, '0'), '.') }}%)</option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-xs text-slate-400">Mengisi otomatis kolom pajak/nilai bersih di bawah — tetap bisa diedit manual.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
                 <label for="tax_amount" class="mb-1 block text-sm font-medium text-slate-700">Pajak (Rp)</label>
                 <input wire:model="tax_amount" id="tax_amount" type="number" step="0.01" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 @error('tax_amount') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror

@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             ProjectTypeSeeder::class,
             PersonnelCategorySeeder::class,
+            TaxTypeSeeder::class,
+            CostCategorySeeder::class,
             ReferenceProjectSeeder::class,
         ]);
     }

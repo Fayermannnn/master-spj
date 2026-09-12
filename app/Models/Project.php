@@ -104,4 +104,20 @@ class Project extends Model
     {
         return $this->hasMany(PersonnelAssignment::class);
     }
+
+    /**
+     * @return HasMany<CostItem, $this>
+     */
+    public function costItems(): HasMany
+    {
+        return $this->hasMany(CostItem::class);
+    }
+
+    /**
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
 }
