@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[Fillable([
     'organization_id', 'project_type_id', 'client_id', 'ppk_contact_id',
-    'code', 'name', 'unit_work', 'project_manager_name',
+    'code', 'name', 'unit_work', 'project_manager_name', 'project_manager_personnel_id',
     'start_date', 'end_date', 'duration_days', 'status',
     'description', 'notes', 'created_by',
 ])]
@@ -86,5 +87,21 @@ class Project extends Model
     public function contract(): HasOne
     {
         return $this->hasOne(Contract::class);
+    }
+
+    /**
+     * @return BelongsTo<Personnel, $this>
+     */
+    public function projectManagerPersonnel(): BelongsTo
+    {
+        return $this->belongsTo(Personnel::class, 'project_manager_personnel_id');
+    }
+
+    /**
+     * @return HasMany<PersonnelAssignment, $this>
+     */
+    public function personnelAssignments(): HasMany
+    {
+        return $this->hasMany(PersonnelAssignment::class);
     }
 }

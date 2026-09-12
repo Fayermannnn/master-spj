@@ -9,6 +9,7 @@ use App\Domain\ProjectManagement\Services\ProjectService;
 use App\Models\Client;
 use App\Models\Contact;
 use App\Models\Organization;
+use App\Models\Personnel;
 use App\Models\Project;
 use App\Models\ProjectType;
 use App\Models\User;
@@ -41,6 +42,8 @@ class Form extends Component
 
     public string $project_manager_name = '';
 
+    public ?string $project_manager_personnel_id = null;
+
     public string $start_date = '';
 
     public string $end_date = '';
@@ -67,6 +70,7 @@ class Form extends Component
             $this->name = $this->project->name;
             $this->unit_work = (string) $this->project->unit_work;
             $this->project_manager_name = (string) $this->project->project_manager_name;
+            $this->project_manager_personnel_id = $this->project->project_manager_personnel_id;
             $this->start_date = $this->project->start_date?->toDateString() ?? '';
             $this->end_date = $this->project->end_date?->toDateString() ?? '';
             $this->description = (string) $this->project->description;
@@ -93,6 +97,7 @@ class Form extends Component
             'name' => ['required', 'string', 'max:255'],
             'unit_work' => ['nullable', 'string', 'max:255'],
             'project_manager_name' => ['nullable', 'string', 'max:255'],
+            'project_manager_personnel_id' => ['nullable', 'ulid', Rule::exists('personnel', 'id')->where('organization_id', $this->organization_id)],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -142,6 +147,22 @@ class Form extends Component
         }
 
         return Contact::query()->where('client_id', $this->client_id)->orderBy('name')->get();
+    }
+
+    /**
+     * @return Collection<int, Personnel>
+     */
+    public function personnelOptions(): Collection
+    {
+        if (! $this->organization_id) {
+            return collect();
+        }
+
+        return Personnel::query()
+            ->where('organization_id', $this->organization_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
     }
 
     public function updatedClientId(): void
@@ -196,6 +217,7 @@ class Form extends Component
             'projectTypeOptions' => $this->projectTypeOptions(),
             'clientOptions' => $this->clientOptions(),
             'contactOptions' => $this->contactOptions(),
+            'personnelOptions' => $this->personnelOptions(),
             'canChooseOrganization' => $viewer->hasRole(RoleName::SuperAdmin->value),
         ])->title($this->project ? 'Ubah Project' : 'Project Baru');
     }

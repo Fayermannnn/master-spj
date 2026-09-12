@@ -63,6 +63,13 @@
             >
                 Kontrak
             </button>
+            <button
+                type="button"
+                wire:click="setTab('personnel')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'personnel' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Personel
+            </button>
         </nav>
     </div>
 
@@ -72,7 +79,7 @@
                 <h3 class="mb-3 text-sm font-semibold text-slate-900">Informasi Umum</h3>
                 <dl class="space-y-2 text-sm">
                     <div class="flex justify-between"><dt class="text-slate-500">Unit Kerja</dt><dd class="text-slate-900">{{ $project->unit_work ?? '—' }}</dd></div>
-                    <div class="flex justify-between"><dt class="text-slate-500">Ketua Tim / PM</dt><dd class="text-slate-900">{{ $project->project_manager_name ?? '—' }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-500">Ketua Tim / PM</dt><dd class="text-slate-900">{{ $project->projectManagerPersonnel?->name ?? $project->project_manager_name ?? '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-slate-500">Tanggal Mulai</dt><dd class="text-slate-900">{{ $project->start_date?->translatedFormat('d M Y') ?? '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-slate-500">Tanggal Selesai</dt><dd class="text-slate-900">{{ $project->end_date?->translatedFormat('d M Y') ?? '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-slate-500">Organisasi (Provider)</dt><dd class="text-slate-900">{{ $project->organization->name }}</dd></div>
@@ -95,7 +102,9 @@
                 </div>
             @endif
         </div>
-    @else
+    @elseif ($activeTab === 'contract')
         <livewire:contracts.form :project="$project" :key="'contract-'.$project->id" />
+    @else
+        <livewire:project-personnel.manager :project="$project" :key="'personnel-'.$project->id" />
     @endif
 </div>

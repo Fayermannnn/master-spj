@@ -79,13 +79,28 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-                <label for="project_manager_name" class="mb-1 block text-sm font-medium text-slate-700">Ketua Tim / PM</label>
+                <label for="project_manager_personnel_id" class="mb-1 block text-sm font-medium text-slate-700">Ketua Tim / PM (dari roster Personnel)</label>
+                <select wire:model="project_manager_personnel_id" id="project_manager_personnel_id" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">— Belum ditentukan / belum tercatat sebagai Personnel —</option>
+                    @foreach ($personnelOptions as $option)
+                        <option value="{{ $option->id }}">{{ $option->name }}</option>
+                    @endforeach
+                </select>
+                @error('project_manager_personnel_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label for="project_manager_name" class="mb-1 block text-sm font-medium text-slate-700">
+                    Nama PM <span class="font-normal text-slate-400">(kalau belum tercatat di roster Personnel)</span>
+                </label>
                 <input wire:model="project_manager_name" id="project_manager_name" type="text" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 @error('project_manager_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
+        </div>
 
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
                 <label for="start_date" class="mb-1 block text-sm font-medium text-slate-700">Tanggal Mulai</label>
                 <input wire:model="start_date" id="start_date" type="date" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">

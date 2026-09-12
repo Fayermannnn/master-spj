@@ -56,8 +56,18 @@ class RolePermissionSeeder extends Seeder
             PermissionName::ProjectsUpdate->value,
             PermissionName::ProjectsDelete->value,
             PermissionName::ProjectsTransitionStatus->value,
+            PermissionName::PersonnelViewAny->value,
+            PermissionName::PersonnelView->value,
+            PermissionName::PersonnelCreate->value,
+            PermissionName::PersonnelUpdate->value,
+            PermissionName::PersonnelDelete->value,
+            PermissionName::PersonnelAssignmentsManage->value,
         ]);
 
+        // personnel.create/update/delete SENGAJA tidak diberikan ke
+        // project_admin: mengelola roster personel perusahaan adalah
+        // tanggung jawab admin_perusahaan (§7 master prompt). project_admin
+        // hanya mengelola PENUGASAN personel ke project yang mereka kelola.
         $projectAdmin = Role::query()->firstOrCreate(['name' => RoleName::ProjectAdmin->value, 'guard_name' => 'web']);
         $projectAdmin->syncPermissions([
             PermissionName::UsersViewAny->value,
@@ -68,6 +78,9 @@ class RolePermissionSeeder extends Seeder
             PermissionName::ProjectsView->value,
             PermissionName::ProjectsUpdate->value,
             PermissionName::ProjectsTransitionStatus->value,
+            PermissionName::PersonnelViewAny->value,
+            PermissionName::PersonnelView->value,
+            PermissionName::PersonnelAssignmentsManage->value,
         ]);
 
         $staff = Role::query()->firstOrCreate(['name' => RoleName::Staff->value, 'guard_name' => 'web']);
@@ -76,6 +89,8 @@ class RolePermissionSeeder extends Seeder
             PermissionName::ClientsView->value,
             PermissionName::ProjectsViewAny->value,
             PermissionName::ProjectsView->value,
+            PermissionName::PersonnelViewAny->value,
+            PermissionName::PersonnelView->value,
         ]);
 
         $viewer = Role::query()->firstOrCreate(['name' => RoleName::Viewer->value, 'guard_name' => 'web']);
@@ -84,6 +99,8 @@ class RolePermissionSeeder extends Seeder
             PermissionName::ClientsView->value,
             PermissionName::ProjectsViewAny->value,
             PermissionName::ProjectsView->value,
+            PermissionName::PersonnelViewAny->value,
+            PermissionName::PersonnelView->value,
         ]);
     }
 }

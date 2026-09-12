@@ -23,7 +23,7 @@ class Show extends Component
     {
         $this->authorize('view', $project);
 
-        $this->project = $project->load(['organization', 'projectType', 'client', 'ppkContact', 'contract']);
+        $this->project = $project->load(['organization', 'projectType', 'client', 'ppkContact', 'contract', 'projectManagerPersonnel']);
     }
 
     public function setTab(string $tab): void

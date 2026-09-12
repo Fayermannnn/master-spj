@@ -45,6 +45,12 @@
                                     Klien
                                 </x-nav-link>
                             @endcan
+
+                            @can('personnel.viewAny')
+                                <x-nav-link :href="route('personnel.index')" :active="request()->routeIs('personnel.*')">
+                                    Personel
+                                </x-nav-link>
+                            @endcan
                         </div>
                     @endcan
 
@@ -61,6 +67,12 @@
                             @can('create', \App\Models\ProjectType::class)
                                 <x-nav-link :href="route('project-types.index')" :active="request()->routeIs('project-types.*')">
                                     Jenis Project
+                                </x-nav-link>
+                            @endcan
+
+                            @can('create', \App\Models\PersonnelCategory::class)
+                                <x-nav-link :href="route('personnel-categories.index')" :active="request()->routeIs('personnel-categories.*')">
+                                    Kategori Personel
                                 </x-nav-link>
                             @endcan
 

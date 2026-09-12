@@ -36,4 +36,14 @@ enum PermissionName: string
     case ProjectsUpdate = 'projects.update';
     case ProjectsDelete = 'projects.delete';
     case ProjectsTransitionStatus = 'projects.transitionStatus';
+
+    case PersonnelCategoriesManage = 'personnel_categories.manage';
+
+    case PersonnelViewAny = 'personnel.viewAny';
+    case PersonnelView = 'personnel.view';
+    case PersonnelCreate = 'personnel.create';
+    case PersonnelUpdate = 'personnel.update';
+    case PersonnelDelete = 'personnel.delete';
+
+    case PersonnelAssignmentsManage = 'personnel_assignments.manage';
 }

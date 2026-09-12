@@ -179,5 +179,14 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   siklus + transisi tervalidasi), Contract (1:1, detail legal/finansial).
   26 test hijau, `composer ci` lulus. Detail & keputusan normalisasi:
   `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-008 s/d D-010.
-- **Phase 3 — Personnel: BERIKUTNYA.** Tenaga ahli/pendukung, penugasan ke
-  project, dokumen personel.
+- **Phase 3 — Personnel: SELESAI.** PersonnelCategory (master data
+  global), Personnel (roster per-organisasi + dokumen via
+  `FileStorageService`), PersonnelAssignment (penugasan ke project,
+  billing unit bebas OB/OH/OM/LS/dll), Project.project_manager_personnel_id
+  (FK opsional mendampingi kolom string lama). 38 test hijau,
+  `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-011/D-012.
+- **Phase 4 — Cost & Payment: BERIKUTNYA.** Cost category/item, budget,
+  payment/termin. Ingat: Tax Type/Tax Rate configurable (§59 master
+  prompt) ditunda ke fase ini — lihat catatan di `PROJECT_HANDOVER.md`
+  Phase 2.

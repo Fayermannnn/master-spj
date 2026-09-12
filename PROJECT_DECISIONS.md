@@ -205,3 +205,53 @@ Tidak ada state-machine class/library generik terpisah.
 transisi statis tidak butuh mesin FSM. Jika kompleksitas bertambah
 signifikan di fase mendatang (mis. transisi bersyarat per project type),
 baru dipertimbangkan ekstraksi ke kelas terpisah.
+
+## D-011 — Personnel: kategori master data + FK PM + FileStorageService generik
+
+**Konteks:** Tiga keputusan kecil ditandai tertunda di akhir Phase 2
+(`PROJECT_HANDOVER.md`). User mengonfirmasi memakai default yang
+diusulkan pada awal Phase 3.
+
+**Keputusan:**
+1. `personnel_categories` — master data GLOBAL (pola sama dengan
+   `project_types`, lihat D-009), bukan enum PHP tertutup, karena §39
+   master prompt eksplisit meminta "Jenis Personel" configurable meski
+   §33 tidak mencantumkannya sebagai tabel terpisah — diperlakukan
+   sebagai tabel implisit yang diperlukan, bukan pelanggaran §33.
+2. `projects.project_manager_personnel_id` (FK nullable ke `personnel`)
+   ditambahkan MENDAMPINGI `project_manager_name` (kolom string lama),
+   bukan menggantikannya — PM yang belum tercatat di roster Personnel
+   organisasi tetap bisa diisi sebagai teks bebas. UI menampilkan nama
+   dari Personnel jika FK terisi, fallback ke kolom string.
+3. `App\Domain\Shared\Services\FileStorageService` dibangun sebagai
+   wrapper tipis di atas Laravel Filesystem (disk `local`/private,
+   bukan `public`) — dipakai personnel_documents sekarang, disiapkan
+   untuk dipakai ulang oleh Evidence/DocumentGenerator di fase
+   mendatang tanpa mengubah kontraknya.
+
+**Alasan:** Konsisten dengan pola yang sudah terbukti di Phase 2
+(D-009) untuk kategori master data; FK+string ganda pada PM menghindari
+migrasi data yang merepotkan sekaligus tetap memungkinkan pencatatan
+rapi begitu Personnel diisi; service file storage generik mencegah
+duplikasi logika penyimpanan/keamanan file di setiap domain yang
+butuh upload (RULE 41/42 master prompt: MIME/size validation di
+validation rules form, path tidak publik, download lewat route
+berpolicy).
+
+## D-012 — Nama tabel Eloquent: `personnel` (bukan `personnels`)
+
+**Konteks:** Konvensi pluralisasi otomatis Eloquent mengubah
+`Personnel` (nama model) menjadi tabel `personnels` — salah, karena
+"personnel" adalah kata baku yang sudah plural/tak-berhitung dalam
+Bahasa Inggris. Ditemukan lewat error migrasi (FK ke tabel yang tidak
+ada) dan lewat Larastan yang melaporkan SEMUA properti model
+`Personnel` sebagai "undefined" karena skema yang diintrospeksi salah.
+
+**Keputusan:** `Personnel::$table` dideklarasikan eksplisit sebagai
+`'personnel'`. Semua migrasi yang mereferensikan tabel ini
+menggunakan `->constrained('personnel')` eksplisit, tidak mengandalkan
+inferensi otomatis dari nama kolom.
+
+**Alasan:** Bug nyata (bukan gaya penulisan) — tanpa ini, foreign key
+migrasi gagal total dan analisis statis tidak dapat memverifikasi kode
+yang menyentuh model ini sama sekali.

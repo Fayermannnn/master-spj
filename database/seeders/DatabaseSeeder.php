@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             OrganizationSeeder::class,
             UserSeeder::class,
             ProjectTypeSeeder::class,
+            PersonnelCategorySeeder::class,
             ReferenceProjectSeeder::class,
         ]);
     }
