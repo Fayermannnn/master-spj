@@ -38,6 +38,10 @@ class VariableResolver
             'payment.amount', 'payment.amount_terbilang', 'payment.termin', 'payment.date',
             'payment.name', 'payment.percentage', 'payment.trigger',
             'deliverable.name', 'deliverable.target_date',
+            'salary.personnel_name', 'salary.personnel_position', 'salary.personnel_npwp',
+            'salary.description', 'salary.quantity', 'salary.unit', 'salary.unit_price',
+            'salary.subtotal', 'salary.tax_amount', 'salary.total', 'salary.amount_terbilang',
+            'salary.period_start', 'salary.period_end',
             'document.number',
             'today',
         ];
@@ -78,8 +82,11 @@ class VariableResolver
         ];
     }
 
-    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null): ?string
+    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null, ?CostItem $costItem = null): ?string
     {
+        $personnelAssignment = $costItem?->personnelAssignment;
+        $personnel = $personnelAssignment?->personnel;
+
         return match ($key) {
             'project.name' => $project->name,
             'project.contract_number' => $project->contract?->contract_number,
@@ -101,6 +108,21 @@ class VariableResolver
             'payment.trigger' => $payment?->trigger,
             'deliverable.name' => $deliverable?->name,
             'deliverable.target_date' => $this->formatDate($deliverable?->target_date),
+            'salary.personnel_name' => $personnel?->name,
+            'salary.personnel_position' => $personnelAssignment !== null && $personnelAssignment->role_on_project !== null
+                ? $personnelAssignment->role_on_project
+                : $personnel?->position,
+            'salary.personnel_npwp' => $personnel?->npwp,
+            'salary.description' => $costItem?->description,
+            'salary.quantity' => $costItem !== null ? rtrim(rtrim((string) $costItem->quantity, '0'), '.') : null,
+            'salary.unit' => $costItem?->unit,
+            'salary.unit_price' => $this->formatCurrency($costItem?->unit_price),
+            'salary.subtotal' => $this->formatCurrency($costItem?->subtotal),
+            'salary.tax_amount' => $this->formatCurrency($costItem?->tax_amount),
+            'salary.total' => $this->formatCurrency($costItem?->total),
+            'salary.amount_terbilang' => $costItem !== null ? $this->terbilangRupiah((float) $costItem->total) : null,
+            'salary.period_start' => $this->formatDate($costItem?->personnelAssignment?->start_date),
+            'salary.period_end' => $this->formatDate($costItem?->personnelAssignment?->end_date),
             'today' => $this->formatDate(Carbon::now()),
             default => null,
         };

@@ -600,3 +600,102 @@ it('deletes an empty cost_items table row when the project has no cost items', f
     $text = extractDocxText($document->disk, $document->path);
     expect($text)->not->toContain('cost_item.');
 });
+
+it('links a generated document to the selected CostItem and stores it as cost_item_id', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['salary.personnel_name', 'salary.total'])]);
+
+    $category = CostCategory::factory()->create();
+    $costItem = CostItem::factory()->create([
+        'project_id' => $project->id,
+        'cost_category_id' => $category->id,
+        'personnel_assignment_id' => $project->personnelAssignments()->firstOrFail()->id,
+        'total' => 5_000_000,
+    ]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        null,
+        $costItem,
+    );
+
+    expect($document->cost_item_id)->toBe($costItem->id);
+});
+
+it('rejects generating with a cost item from a different project', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+
+    $otherProject = Project::factory()->create();
+    $costItem = CostItem::factory()->create(['project_id' => $otherProject->id]);
+
+    app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template,
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        null,
+        $costItem,
+    );
+})->throws(DomainActionException::class);
+
+it('auto-fills salary.* variables when a personnel CostItem is selected through the Livewire manager', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['salary.personnel_name', 'salary.total', 'salary.amount_terbilang'])]);
+
+    $category = CostCategory::factory()->create();
+    $assignment = $project->personnelAssignments()->firstOrFail();
+    $costItem = CostItem::factory()->create([
+        'project_id' => $project->id,
+        'cost_category_id' => $category->id,
+        'personnel_assignment_id' => $assignment->id,
+        'description' => 'Honor Team Leader Bulan 1',
+        'total' => 10_000_000,
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id)
+        ->set('selectedCostItemId', $costItem->id);
+
+    $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
+    $inputs = $component->get('variableInputs');
+
+    expect($inputs[array_search('salary.personnel_name', $keys, true)])->toBe($assignment->personnel->name);
+    expect($inputs[array_search('salary.total', $keys, true)])->toBe('Rp 10.000.000');
+    expect($inputs[array_search('salary.amount_terbilang', $keys, true)])->toBe('Sepuluh Juta Rupiah');
+});
+
+it('only lists personnel-linked cost items as salary options, excluding non-personnel costs', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['salary.personnel_name'])]);
+
+    $category = CostCategory::factory()->create();
+    $assignment = $project->personnelAssignments()->firstOrFail();
+    $salaryItem = CostItem::factory()->create([
+        'project_id' => $project->id,
+        'cost_category_id' => $category->id,
+        'personnel_assignment_id' => $assignment->id,
+        'description' => 'Honor Team Leader',
+    ]);
+    $nonPersonnelItem = CostItem::factory()->create([
+        'project_id' => $project->id,
+        'cost_category_id' => $category->id,
+        'personnel_assignment_id' => null,
+        'description' => 'Sewa Kendaraan',
+    ]);
+
+    $options = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->instance()
+        ->salaryCostItemOptions();
+
+    expect($options->pluck('id'))->toContain($salaryItem->id);
+    expect($options->pluck('id'))->not->toContain($nonPersonnelItem->id);
+});

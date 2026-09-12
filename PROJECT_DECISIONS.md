@@ -1544,3 +1544,49 @@ tidak punya item biaya sama sekali — bukan meninggalkan baris kosong
 atau placeholder mentah.
 
 **Hasil:** 212 test (2 baru), `composer ci` bersih.
+
+## D-033 — Slip Gaji/Honor Personel: variable `salary.*` dari CostItem terpilih
+
+**Konteks:** Fitur keempat dari batch surat administratif. Slip Gaji
+butuh identitas personil (nama/posisi/NPWP) + rincian honor
+(uraian/kuantitas/tarif/subtotal/pajak/total) untuk SATU personil pada
+SATU dokumen — beda dari Invoice (D-032) yang butuh tabel BANYAK item
+biaya sekaligus.
+
+**Keputusan:**
+
+1. **BUKAN variable "gaji kotor dikurangi potongan sama dengan bersih"** —
+   ditolak secara sadar setelah ditelusuri semantik `CostItem`:
+   `total` di `CostItem` (lihat `CostItemService::applyCalculation()`,
+   D-016) berarti "subtotal DITAMBAH pajak" (biaya ke project/klien,
+   pajak dibebankan NAIK seperti PPN), BUKAN "gaji dikurangi potongan
+   PPh21" (yang arahnya justru TURUN, ke personil). Memaksakan
+   `salary.net = subtotal - tax_amount` dari data yang sebenarnya
+   berarti sebaliknya akan MEMBERI ANGKA SALAH di slip gaji sungguhan —
+   lebih baik menampilkan `salary.subtotal`/`salary.tax_amount`/
+   `salary.total` apa adanya (sesuai definisi asli CostItem) daripada
+   mengarang narasi "netto" yang tidak didukung data.
+2. **`documents.cost_item_id`** (migrasi ADDITIVE, nullable,
+   `nullOnDelete()`) — pola IDENTIK `payment_id`/`deliverable_id`
+   (D-027): dokumen yang sudah jadi tidak boleh berubah/hilang kalau
+   CostItem acuannya dihapus kemudian.
+3. **Dropdown pemilihan HANYA CostItem yang `personnel_assignment_id`-nya
+   terisi** (`salaryCostItemOptions()`) — item biaya non-personil (mis.
+   sewa kendaraan) tidak masuk akal jadi "slip gaji", difilter di query,
+   bukan di tampilan.
+4. **`VariableResolver::resolveScalar()` dapat parameter ke-5** (`?CostItem $costItem`,
+   ditambah di akhir seperti `$deliverable` sebelumnya — backward
+   compatible). Identitas personil (`salary.personnel_name`, dst)
+   diturunkan dari `$costItem->personnelAssignment->personnel`, BUKAN
+   parameter Personnel terpisah — satu sumber kebenaran untuk "personil
+   siapa" pada baris CostItem itu.
+5. Auto-fill sebagai DEFAULT (pola sama payment/deliverable) — tetap
+   bisa diedit manual, memilih CostItem bersifat opsional.
+
+**Verifikasi:** 4 test baru mencakup: `cost_item_id` tersimpan di
+Document, validasi cross-project ditolak, alur Livewire auto-fill
+(termasuk `salary.amount_terbilang` yang reuse helper terbilang dari
+D-031), dan filter dropdown benar-benar mengecualikan item biaya
+non-personil.
+
+**Hasil:** 216 test (4 baru), `composer ci` bersih.

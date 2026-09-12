@@ -9,6 +9,7 @@ use App\Domain\DocumentGenerator\Services\VariableResolver;
 use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Shared\Exceptions\DomainActionException;
+use App\Models\CostItem;
 use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
@@ -51,6 +52,8 @@ class Manager extends Component
 
     public ?string $selectedDeliverableId = null;
 
+    public ?string $selectedCostItemId = null;
+
     /**
      * Cache per-render (BUKAN state Livewire — `private`, tidak
      * disinkronkan lewat wire) supaya tab "Dokumen" tidak menjalankan
@@ -83,9 +86,10 @@ class Manager extends Component
         $this->selectedRequirementId = $requirementId;
         $this->selectedPaymentId = null;
         $this->selectedDeliverableId = null;
+        $this->selectedCostItemId = null;
 
         $template = $this->activeTemplateFor($requirementId);
-        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null);
+        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null, null);
     }
 
     public function updatedSelectedPaymentId(): void
@@ -133,9 +137,32 @@ class Manager extends Component
         }
     }
 
+    /**
+     * Mengisi otomatis `salary.*` sebagai DEFAULT saat sebuah CostItem
+     * personil dipilih — sama seperti Payment/Deliverable di atas.
+     */
+    public function updatedSelectedCostItemId(): void
+    {
+        if ($this->selectedRequirementId === null) {
+            return;
+        }
+
+        $resolver = app(VariableResolver::class);
+        $template = $this->activeTemplateFor($this->selectedRequirementId);
+        $costItem = $this->selectedCostItemId !== null && $this->selectedCostItemId !== ''
+            ? $this->project->costItems()->find($this->selectedCostItemId)
+            : null;
+
+        foreach ($this->tablelessDetectedKeys($template, $resolver) as $index => $key) {
+            if (str_starts_with($key, 'salary.')) {
+                $this->variableInputs[$index] = $resolver->resolveScalar($key, $this->project, null, null, $costItem) ?? '';
+            }
+        }
+    }
+
     public function closeGenerateForm(): void
     {
-        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId']);
+        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId', 'selectedCostItemId']);
     }
 
     public function generate(DocumentGeneratorService $service): void
@@ -163,6 +190,10 @@ class Manager extends Component
             ? $this->project->deliverables()->find($this->selectedDeliverableId)
             : null;
 
+        $costItem = $this->selectedCostItemId !== null && $this->selectedCostItemId !== ''
+            ? $this->project->costItems()->find($this->selectedCostItemId)
+            : null;
+
         /** @var User $user */
         $user = Auth::user();
 
@@ -170,7 +201,7 @@ class Manager extends Component
         $scalarValues = array_combine($keys, array_pad($this->variableInputs, count($keys), ''));
 
         try {
-            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable);
+            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable, $costItem);
             $this->closeGenerateForm();
             session()->flash('status', "Dokumen \"{$requirement->name}\" berhasil digenerate.");
         } catch (DomainActionException $exception) {
@@ -228,6 +259,27 @@ class Manager extends Component
             ->contains(fn (string $key): bool => str_starts_with($key, 'deliverable.'));
     }
 
+    public function needsSalaryContext(?DocumentTemplate $template): bool
+    {
+        return collect($this->tablelessDetectedKeys($template))
+            ->contains(fn (string $key): bool => str_starts_with($key, 'salary.'));
+    }
+
+    /**
+     * Item biaya yang TERHUBUNG ke penugasan personil — Slip Gaji
+     * hanya masuk akal untuk baris yang mewakili honor/fee seseorang,
+     * bukan biaya non-personil (mis. sewa kendaraan).
+     *
+     * @return Collection<int, CostItem>
+     */
+    public function salaryCostItemOptions(): Collection
+    {
+        return $this->project->costItems()
+            ->whereNotNull('personnel_assignment_id')
+            ->with('personnelAssignment.personnel')
+            ->get();
+    }
+
     /**
      * @return list<string>
      */
@@ -258,10 +310,10 @@ class Manager extends Component
     /**
      * @return list<string>
      */
-    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable): array
+    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable, ?CostItem $costItem): array
     {
         return array_map(
-            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable) ?? '',
+            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable, $costItem) ?? '',
             $this->tablelessDetectedKeys($template, $resolver),
         );
     }

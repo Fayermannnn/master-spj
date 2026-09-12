@@ -72,6 +72,19 @@
                         </div>
                     @endif
 
+                    @if ($this->needsSalaryContext($template))
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Item Biaya Personel (untuk Slip Gaji)</label>
+                            <select wire:model.live="selectedCostItemId" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                                <option value="">— Isi manual di bawah —</option>
+                                @foreach ($this->salaryCostItemOptions() as $costItem)
+                                    <option value="{{ $costItem->id }}">{{ $costItem->personnelAssignment?->personnel?->name }} — {{ $costItem->description }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-xs text-slate-400">Memilih item biaya mengisi otomatis kolom "salary.*" di bawah — tetap bisa diedit manual.</p>
+                        </div>
+                    @endif
+
                     @foreach ($this->tablelessDetectedKeys($template) as $index => $key)
                         <div>
                             @php $wrappedKey = '{{'.$key.'}}'; @endphp

@@ -12,6 +12,7 @@ use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Settings\Services\NumberingService;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Domain\Shared\Services\FileStorageService;
+use App\Models\CostItem;
 use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
@@ -58,6 +59,7 @@ class DocumentGeneratorService
         ?Payment $payment,
         ?User $generatedBy,
         ?Deliverable $deliverable = null,
+        ?CostItem $costItem = null,
     ): Document {
         if ($template->document_requirement_id !== $requirement->id) {
             throw new DomainActionException('Template yang dipilih tidak sesuai dengan requirement dokumen ini.');
@@ -69,6 +71,10 @@ class DocumentGeneratorService
 
         if ($deliverable !== null && $deliverable->project_id !== $project->id) {
             throw new DomainActionException('Deliverable yang dipilih harus berasal dari project yang sama.');
+        }
+
+        if ($costItem !== null && $costItem->project_id !== $project->id) {
+            throw new DomainActionException('Item biaya yang dipilih harus berasal dari project yang sama.');
         }
 
         $project->loadMissing(['organization', 'client', 'ppkContact', 'contract', 'personnelAssignments.personnel']);
@@ -190,6 +196,7 @@ class DocumentGeneratorService
             'document_template_id' => $template->id,
             'payment_id' => $payment?->id,
             'deliverable_id' => $deliverable?->id,
+            'cost_item_id' => $costItem?->id,
             'number' => $documentNumber,
             'version' => $version,
             'name' => $requirement->name,
