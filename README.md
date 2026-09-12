@@ -38,5 +38,13 @@ composer lint    # pint (auto-fix format)
 
 ## Status pengembangan
 
-Lihat tabel fase di `PROJECT_BLUEPRINT.md` §9. Saat ini: **Phase 0 selesai**,
-lanjut ke **Phase 1 — Foundation**.
+Lihat tabel fase di `PROJECT_BLUEPRINT.md` §9/§12 dan `PROJECT_HANDOVER.md`.
+Saat ini: **Phase 1 (Foundation) selesai**, lanjut ke **Phase 2 — Project**.
+
+## Login demo (lokal saja)
+
+| Role | Email | Password |
+|---|---|---|
+| Super Admin | superadmin@master-spj.test | password |
+| Admin Perusahaan | admin@ciptarencana.example | password |
+| Staff | staff@ciptarencana.example | password |

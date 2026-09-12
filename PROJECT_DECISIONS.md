@@ -83,3 +83,69 @@ terdokumentasi sejak awal, alih-alih `.gitkeep` kosong.
 **Alasan:** Dokumentasi minimal tanpa menunda pembuatan struktur folder;
 akan diperluas jadi `docs/MODULES.md` yang lebih lengkap saat domain mulai
 diisi kode nyata.
+
+## D-006 — RBAC pakai `spatie/laravel-permission`; tambah domain `Identity`
+
+**Konteks:** Phase 1 butuh Role/Permission yang configurable (master data,
+bukan hard-code). Saat implementasi juga ketahuan 18 domain Phase 0 tidak
+punya tempat untuk User/Role/Permission/Auth — `Organization` domain khusus
+entitas perusahaan/tenant, bukan manajemen user.
+
+**Opsi RBAC:**
+1. Bangun RBAC custom dari nol (tabel roles/permissions/pivot manual).
+2. Pakai `spatie/laravel-permission` — package matang, tabel & pattern
+   sudah persis sesuai kebutuhan (roles, permissions, model_has_roles,
+   model_has_permissions, role_has_permissions, Blade directive `@can`,
+   kompatibel dengan Laravel Policy).
+
+**Keputusan RBAC:** Opsi 2. Migration morph key (`model_id` di
+`model_has_roles`/`model_has_permissions`) diubah dari `unsignedBigInteger`
+ke `ulid` agar konsisten dengan primary key `users.id` (lihat §D-006a di
+bawah soal ULID). `SUPER_ADMIN` mendapat semua permission via
+`Gate::before` (bypass otomatis) supaya permission baru di fase-fase
+berikutnya tidak perlu di-reseed manual ke role ini.
+
+**Keputusan domain:** Tambah domain ke-19: `Identity` — User, Role,
+Permission, Auth. `Organization` tetap khusus entitas perusahaan/tenant.
+
+**Alasan:** Package battle-tested menghindari reinventing wheel (RULE 67:
+jangan over-engineer) sekaligus memenuhi "permission harus configurable"
+(§7 master prompt). Pemisahan domain `Identity` vs `Organization` menjaga
+batas domain tetap jelas sesuai prinsip modular monolith.
+
+### D-006a — Primary key: ULID untuk `users` & `organizations`, bigint untuk `roles`/`permissions`
+
+**Konteks:** RULE 34 master prompt: "Gunakan UUID atau ULID untuk entity
+utama." Perlu ditentukan mana yang termasuk "entity utama".
+
+**Keputusan:** `users` dan `organizations` pakai ULID (dapat muncul di URL,
+di-reference lintas domain sejak Phase 2). Tabel `roles`/`permissions` milik
+package `spatie/laravel-permission` tetap bigint auto-increment default —
+keduanya adalah master data tertutup yang dikelola admin, bukan resource
+yang dibuka lewat URL publik/di-enumerate pihak luar, dan mengubah tipe PK
+package pihak ketiga menambah friksi tanpa manfaat keamanan/desain nyata.
+
+**Alasan:** Konsisten dengan semangat RULE 34 (menyamarkan ID resource
+domain utama dari enumerasi) tanpa memaksakan ULID ke tabel lookup kecil
+yang sudah punya konvensi package sendiri.
+
+## D-007 — Validasi: `rules()` di komponen Livewire, bukan `FormRequest` terpisah, untuk modul yang murni Livewire-driven
+
+**Konteks:** DoD (§8/§51 master prompt) menyebut "FormRequest" sebagai
+bagian definition-of-done tiap modul. Modul Phase 1 (Organization, User)
+sepenuhnya di-drive Livewire (tidak ada route POST/PUT controller
+tradisional) — `Illuminate\Foundation\Http\FormRequest` dirancang untuk
+siklus HTTP request (menerima `$this->route()`, `$this->user()` dari
+request nyata), dan memaksakannya ke aksi Livewire (dipanggil lewat
+`wire:submit`, bukan HTTP form POST biasa) hanya menambah indirection tanpa
+manfaat.
+
+**Keputusan:** Untuk modul yang aksinya 100% lewat Livewire, aturan
+validasi didefinisikan di method `rules()` komponen Livewire itu sendiri
+(idiomatic Livewire, setara FormRequest untuk konteks ini). `FormRequest`
+sungguhan dipakai kalau ada endpoint HTTP asli (mis. API/import di fase
+mendatang).
+
+**Alasan:** Menghindari over-engineering (RULE 67) sambil tetap memenuhi
+maksud DoD: sumber kebenaran validasi tunggal, testable, terpisah dari
+markup.

@@ -84,10 +84,15 @@ app/Domain/<Domain>/
   README.md
 ```
 
-18 domain awal (lihat README di masing-masing folder untuk detail):
-Organization, ProjectManagement, Contract, Client, Personnel, Cost, Payment,
-Workplan, DocumentRequirement, DocumentTemplate, DocumentGenerator, Spj,
-Evidence, Workflow, Notification, AuditLog, Settings, Shared.
+19 domain (lihat README di masing-masing folder untuk detail):
+Identity, Organization, ProjectManagement, Contract, Client, Personnel,
+Cost, Payment, Workplan, DocumentRequirement, DocumentTemplate,
+DocumentGenerator, Spj, Evidence, Workflow, Notification, AuditLog,
+Settings, Shared.
+
+`Identity` (User, Role, Permission, Auth) ditambahkan di Phase 1 — terpisah
+dari `Organization` (entitas perusahaan/tenant). Lihat
+`PROJECT_DECISIONS.md` D-006.
 
 Aturan impor lintas domain akan didokumentasikan di `docs/domain-map.md`
 begitu domain kedua mulai saling berelasi (Phase 2).
@@ -163,8 +168,10 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   yang TIDAK semuanya relevan sebagai SPJ requirement — harus dipilah saat
   seeding (lihat §17 master prompt).
 
-## 12. Next Step
+## 12. Status Fase
 
-Lanjut ke **Phase 1 — Foundation** setelah `PROJECT_DECISIONS.md` dan
-struktur modular ini dikonfirmasi stabil (migration awal + test hijau sudah
-diverifikasi pada tahap Phase 0 ini).
+- **Phase 0 — Discovery & Blueprint: SELESAI.**
+- **Phase 1 — Foundation: SELESAI.** Auth, layout, User Management, RBAC
+  (`spatie/laravel-permission`), Organization CRUD, audit log append-only.
+  13 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`.
+- **Phase 2 — Project: BERIKUTNYA.** Lihat `PROJECT_HANDOVER.md` §Next Task.

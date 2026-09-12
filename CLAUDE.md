@@ -61,6 +61,6 @@ Satu fase selesai → tag `phaseN-complete`.
 
 ## Status
 
-Lihat tabel fase di `PROJECT_BLUEPRINT.md` §9. Keputusan arsitektur di
-`PROJECT_DECISIONS.md`. Progres & next task di `PROJECT_HANDOVER.md` (dibuat
-mulai akhir Phase 1).
+Lihat tabel fase di `PROJECT_BLUEPRINT.md` §9/§12. Keputusan arsitektur di
+`PROJECT_DECISIONS.md`. Progres & next task di `PROJECT_HANDOVER.md` —
+**wajib dibaca & diperbarui di akhir setiap fase.**
