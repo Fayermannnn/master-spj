@@ -207,6 +207,28 @@ it('deletes the generated docx and pdf files together with the record', function
     expect(Document::withTrashed()->find($document->id)?->trashed())->toBeTrue();
 });
 
+it('returns a 404 instead of crashing when the docx file is missing from disk but the record remains', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $document = app(DocumentGeneratorService::class)->generate($project, $requirement, $template, ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'], null, null);
+
+    Storage::disk($document->disk)->delete($document->path);
+
+    $this->actingAs($user)
+        ->get(route('generated-documents.download', ['document' => $document, 'type' => 'docx']))
+        ->assertNotFound();
+});
+
+it('returns a 404 instead of crashing when the pdf file is missing from disk but the record remains', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $document = app(DocumentGeneratorService::class)->generate($project, $requirement, $template, ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'], null, null);
+
+    Storage::disk((string) $document->pdf_disk)->delete((string) $document->pdf_path);
+
+    $this->actingAs($user)
+        ->get(route('generated-documents.download', ['document' => $document, 'type' => 'pdf']))
+        ->assertNotFound();
+});
+
 it('lets a project member generate a document through the Livewire manager', function (): void {
     ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
 

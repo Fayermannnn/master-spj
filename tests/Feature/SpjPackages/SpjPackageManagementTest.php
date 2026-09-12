@@ -182,6 +182,49 @@ it('rejects finalizing an empty package', function (): void {
     $service->finalize($package);
 })->throws(DomainActionException::class);
 
+it('rejects finalizing a package that is already finalized', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->finalize($package);
+
+    $service->finalize($package->fresh());
+})->throws(DomainActionException::class);
+
+it('rejects adding a document to an already-finalized package', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->finalize($package);
+
+    $otherRequirement = DocumentRequirement::factory()->create();
+    $templatePath = "document-templates/{$otherRequirement->id}/template.docx";
+    Storage::disk('local')->put($templatePath, minimalSpjTemplateDocxBytes());
+    $otherTemplate = DocumentTemplate::factory()->create([
+        'document_requirement_id' => $otherRequirement->id,
+        'version' => 1,
+        'status' => TemplateStatus::Active->value,
+        'disk' => 'local',
+        'path' => $templatePath,
+        'detected_variables' => ['project.name'],
+    ]);
+    $otherDocument = app(DocumentGeneratorService::class)->generate($project, $otherRequirement, $otherTemplate, ['project.name' => $project->name], null, $user);
+
+    $service->addDocument($package->fresh(), $otherDocument);
+})->throws(DomainActionException::class);
+
+it('rejects removing an item from an already-finalized package', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $item = $service->addDocument($package, $document);
+    $service->finalize($package);
+
+    $service->removeItem($item->fresh());
+})->throws(DomainActionException::class);
+
 it('removes an item from a draft package', function (): void {
     ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
     $service = app(SpjPackageService::class);
@@ -217,6 +260,34 @@ it('exports a package as a ZIP containing the document PDF and a manifest', func
     expect(count($names))->toBe(2);
     expect($manifestContent)->toContain($project->name);
     expect($manifestContent)->toContain($requirement->name);
+});
+
+it('skips an item from the ZIP and manifest when its source file is missing from disk', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+
+    Storage::disk($document->pdf_disk ?? $document->disk)->delete($document->pdf_path ?? $document->path);
+
+    $zipPath = app(SpjExportService::class)->export($package->fresh(['items.document', 'items.evidence', 'project', 'payment']));
+
+    $zip = new ZipArchive;
+    $zip->open($zipPath);
+    $names = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $names[] = $zip->getNameIndex($i);
+    }
+    $manifestContent = $zip->getFromName('manifest.txt');
+    $zip->close();
+    @unlink($zipPath);
+
+    // Hanya manifest.txt yang tersisa — entry dokumen ikut dilewati
+    // karena file sumbernya tidak ada, TIDAK membuat ZIP korup atau
+    // gagal, dan manifest tidak mengklaim dokumen yang sebenarnya
+    // tidak ada di dalam arsip.
+    expect($names)->toBe(['manifest.txt']);
+    expect($manifestContent)->not->toContain('01.');
 });
 
 it('prevents a member from another organization from managing packages', function (): void {

@@ -144,6 +144,25 @@ it('returns a 404 when downloading evidence that has already been deleted', func
         ->assertNotFound();
 });
 
+it('returns a 404 instead of crashing when the evidence file is missing from disk but the record remains', function (): void {
+    Storage::fake('local');
+
+    [$user, $project] = makeEvidenceProjectAdmin();
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->set('name', 'Bukti')
+        ->set('file', UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf'))
+        ->call('upload');
+
+    $evidence = Evidence::query()->where('project_id', $project->id)->firstOrFail();
+    Storage::disk($evidence->disk)->delete($evidence->path);
+
+    $this->actingAs($user)
+        ->get(route('evidences.download', $evidence))
+        ->assertNotFound();
+});
+
 it('blocks downloading evidence for a user outside the owning organization', function (): void {
     Storage::fake('local');
 

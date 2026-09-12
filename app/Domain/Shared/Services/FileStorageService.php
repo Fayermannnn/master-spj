@@ -8,6 +8,7 @@ use Illuminate\Http\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * @domain Shared
@@ -82,5 +83,23 @@ class FileStorageService
     public function exists(string $disk, string $path): bool
     {
         return Storage::disk($disk)->exists($path);
+    }
+
+    /**
+     * Titik tunggal untuk mengunduh file lewat route yang dijaga
+     * Policy — dipakai SETELAH `Gate::authorize()` di controller.
+     * Sebelum ini setiap download controller memanggil
+     * `Storage::disk()->download()` langsung, yang melempar exception
+     * Flysystem mentah (500) kalau baris DB masih ada tapi file fisik
+     * sudah hilang dari disk (dihapus manual, storage rusak, dst) —
+     * bukan penghapusan lewat alur resmi (yang menghapus file+row
+     * bersamaan). Dicek eksplisit di sini supaya kegagalan itu jadi 404
+     * terkontrol untuk SEMUA download controller sekaligus.
+     */
+    public function download(string $disk, string $path, string $downloadName): StreamedResponse
+    {
+        abort_unless($this->exists($disk, $path), 404, 'Berkas tidak ditemukan di penyimpanan.');
+
+        return Storage::disk($disk)->download($path, $downloadName);
     }
 }

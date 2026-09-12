@@ -7,9 +7,9 @@ lanjut tanpa kehilangan konteks.
 
 **Roadmap 10-fase awal SELESAI (Phase 1-10).** Fase tambahan di luar
 roadmap: **Notification — SELESAI**, **Audit Log viewer & self-service
-Profile — SELESAI**. Repo di-push ke GitHub
-(`https://github.com/Fayermannnn/master-spj`, Public — dikonfirmasi
-user).
+Profile — SELESAI**, **Backlog QA Phase 10 — SELESAI** (lihat D-024).
+Repo di-push ke GitHub (`https://github.com/Fayermannnn/master-spj`,
+Public — dikonfirmasi user).
 
 ## Completed Features
 
@@ -70,6 +70,32 @@ diperbaiki, lihat D-022).
   saat ini salah, tolak password baru terlalu pendek, semua role bisa
   akses halaman sendiri).
 
+### Backlog QA Phase 10 (D-024)
+
+Dua item backlog dari D-021 poin 9 dikerjakan:
+
+- **Transisi status enum**: riset menemukan hanya `SpjPackageStatus`
+  yang punya aturan transisi nyata di service; `ChecklistStatus`/
+  `TemplateStatus`/`WorkplanStatus` TIDAK punya aturan transisi sama
+  sekali dan TIDAK ADA invarian bisnis alami untuk dijadikan dasar
+  aturan baru (dicek satu-satu, lihat D-024) — diputuskan bersama user
+  untuk TIDAK mengarang FSM tanpa requirement (RULE 9), dibiarkan
+  sebagai keterbatasan sengaja. Test transisi tidak-valid yang
+  DITAMBAHKAN hanya untuk `SpjPackageStatus` (finalize ganda,
+  addDocument/removeItem pasca-final).
+- **File hilang dari disk pasca soft-delete**: `Reports` tidak relevan
+  (tidak ada file persisten). Ditemukan & diperbaiki 2 bug nyata:
+  `GeneratedDocuments` download crash 500 mentah saat file fisik hilang
+  tapi row masih ada; `SpjPackages` export ZIP/manifest tidak sinkron
+  (manifest mengklaim file yang sebenarnya tidak ada di ZIP). Perbaikan:
+  `FileStorageService::download()` baru (exists-check + 404 terkontrol)
+  dipakai di SEMUA 4 controller download file (GeneratedDocument,
+  DocumentTemplate, Evidence, PersonnelDocument — 2 yang terakhir
+  ditemukan punya bug identik di luar cakupan awal, diperbaiki sekaligus
+  atas persetujuan user); `SpjExportService` skip item dari ZIP+manifest
+  sekaligus kalau file sumbernya hilang.
+- 10 test baru (151 total).
+
 ## Repository
 
 `https://github.com/Fayermannnn/master-spj` (**Public**, dikonfirmasi
@@ -79,8 +105,13 @@ push berikutnya tinggal `git push` / `git push --tags`.
 
 ## Known Issues / Deferred
 
-Backlog QA Phase 10 (test transisi status enum lain, test file hilang
-pasca soft-delete) masih berlaku, belum dikerjakan.
+Backlog QA Phase 10 SELESAI (lihat D-024). Sisa keterbatasan yang
+sengaja tidak ditutup:
+- `ChecklistStatus`/`TemplateStatus`/`WorkplanStatus` tidak punya
+  validasi transisi status — bisa diubah bebas ke status apapun. Bukan
+  bug (tidak ada invarian bisnis yang ditemukan untuk dijadikan dasar
+  aturan), tapi kalau requirement konkret muncul nanti (mis. approval
+  sebelum unmark checklist), itu perlu dirancang sebagai fitur baru.
 
 Tambahan:
 - Audit Log admin_perusahaan TIDAK melihat aksi yang dilakukan
@@ -103,33 +134,39 @@ server yang watch).
 
 ## Next Task
 
-Tidak ada fase terjadwal berikutnya. Kemungkinan arah (lihat juga opsi
-yang sempat diajukan tapi belum dipilih user: SPJ submission tracking/
-`deliverable.name` wiring ke Deliverable model — lihat riwayat chat/
-D-022 konteks):
+Tidak ada fase terjadwal berikutnya. Backlog QA Phase 10 (D-021 poin 9)
+SELESAI. Kemungkinan arah (lihat juga opsi yang sempat diajukan tapi
+belum dipilih user: SPJ submission tracking/`deliverable.name` wiring
+ke Deliverable model — lihat riwayat chat/D-022 konteks):
 1. Fitur baru lain sesuai kebutuhan konkret yang muncul.
-2. Backlog QA Phase 10.
+2. Aturan transisi status baru untuk ChecklistStatus/TemplateStatus/
+   WorkplanStatus — HANYA kalau ada requirement bisnis konkret (lihat
+   D-024), jangan diasumsikan sendiri.
 3. Permintaan fitur baru dari user.
 4. Production/deployment readiness — keputusan arsitektur besar baru
    kalau diminta (RULE 10).
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 141
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 151
 test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-023). Baru: D-023 (Audit Log
-viewer discope lewat organisasi pelaku bukan subjek, permission baru
-`audit_logs.viewAny`, self-service Profile tanpa authorize() karena
-selalu beroperasi ke diri sendiri, bug flash message pada komponen
-non-redirect ditemukan & diperbaiki).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-024). Baru: D-024 (backlog QA
+Phase 10 — hanya SpjPackageStatus punya aturan transisi nyata, 3 enum
+lain sengaja dibiarkan tanpa validasi karena tidak ada invarian bisnis;
+2 bug file-hilang-dari-disk ditemukan & diperbaiki: crash 500 di
+GeneratedDocuments download, ZIP/manifest tidak sinkron di SpjPackages
+export; `FileStorageService::download()` baru dipakai di 4 controller
+download).
 
 ## Security Notes
 
-Tidak berubah dari D-021/D-022. Audit Log viewer sendiri TIDAK menambah
-permukaan serangan — hanya membaca data yang sudah ada dengan scoping
-ketat; halaman Profil hanya bisa mengubah data milik user yang sedang
-login sendiri (diverifikasi: tidak ada parameter yang bisa
-memengaruhi user MANA yang diubah).
+D-021/D-022 tetap berlaku, ditambah D-024: perbaikan file-hilang adalah
+hardening (mencegah stack trace Flysystem mentah bocor ke response 500
+saat DEBUG aktif), bukan celah otorisasi baru — `Gate::authorize()`
+tetap dipanggil LEBIH DULU di semua controller download sebelum
+`FileStorageService::download()` dipanggil, urutan ini tidak berubah
+dan tetap diverifikasi test (kasus cross-organization tetap
+`assertForbidden()`, bukan `assertNotFound()`).

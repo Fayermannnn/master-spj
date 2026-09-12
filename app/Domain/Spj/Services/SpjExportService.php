@@ -53,12 +53,25 @@ class SpjExportService
             }
 
             [$disk, $path] = $source;
+
+            // File sumber bisa hilang dari disk (dihapus manual, storage
+            // rusak) walau baris Document/Evidence-nya masih ada — kalau
+            // ini tidak dicek, ZIP tetap terbentuk & manifest.txt tetap
+            // mencantumkan entry yang sebenarnya tidak ada di dalamnya.
+            // Item ini di-skip dari ZIP MAUPUN manifest sekaligus, sama
+            // seperti item yang document/evidence-nya sudah soft-deleted.
+            if (! Storage::disk($disk)->exists($path)) {
+                continue;
+            }
+
             $absolute = Storage::disk($disk)->path($path);
             $extension = pathinfo($path, PATHINFO_EXTENSION);
             $safeName = (string) preg_replace('/[\\\\\/:*?"<>|]/', '-', $item->displayName());
             $entryName = sprintf('%02d - %s.%s', $index, $safeName, $extension);
 
-            $zip->addFile($absolute, $entryName);
+            if (! $zip->addFile($absolute, $entryName)) {
+                continue;
+            }
 
             $requirementName = $this->requirementNameFor($item);
             $manifest[] = sprintf('%02d. %s%s', $index, $item->displayName(), $requirementName !== null ? " — memenuhi: {$requirementName}" : '');

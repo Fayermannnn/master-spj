@@ -93,6 +93,26 @@ it('uploads, downloads, and deletes a personnel document within policy bounds', 
     Storage::disk('local')->assertMissing($document->path);
 });
 
+it('returns a 404 instead of crashing when the personnel document file is missing from disk but the record remains', function (): void {
+    Storage::fake('local');
+
+    $organization = Organization::factory()->create();
+    $admin = makePersonnelAdminForOrg($organization);
+    $personnel = Personnel::factory()->create(['organization_id' => $organization->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Documents::class, ['personnel' => $personnel])
+        ->set('document_type', 'ktp')
+        ->set('file', UploadedFile::fake()->create('ktp.pdf', 100, 'application/pdf'))
+        ->call('upload');
+
+    $document = $personnel->documents()->firstOrFail();
+    Storage::disk($document->disk)->delete($document->path);
+
+    $response = $this->actingAs($admin)->get(route('personnel-documents.download', $document));
+    $response->assertNotFound();
+});
+
 it('prevents a user from another organization downloading a personnel document', function (): void {
     Storage::fake('local');
 

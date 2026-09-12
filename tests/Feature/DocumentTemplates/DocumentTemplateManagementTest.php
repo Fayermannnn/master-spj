@@ -130,6 +130,29 @@ it('blocks deleting the active template version', function (): void {
     expect(DocumentTemplate::query()->find($active->id))->not->toBeNull();
 });
 
+it('downloads a template file', function (): void {
+    Storage::fake('local');
+
+    $admin = makeTemplateSuperAdmin();
+    $template = DocumentTemplate::factory()->create();
+    Storage::disk($template->disk)->put($template->path, minimalDocxBytes());
+
+    $this->actingAs($admin)
+        ->get(route('document-templates.download', $template))
+        ->assertOk();
+});
+
+it('returns a 404 instead of crashing when the template file is missing from disk but the record remains', function (): void {
+    Storage::fake('local');
+
+    $admin = makeTemplateSuperAdmin();
+    $template = DocumentTemplate::factory()->create();
+
+    $this->actingAs($admin)
+        ->get(route('document-templates.download', $template))
+        ->assertNotFound();
+});
+
 it('prevents a non super-admin from uploading a template', function (): void {
     $organization = Organization::factory()->create();
     $admin = User::factory()->create(['organization_id' => $organization->id]);

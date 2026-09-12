@@ -987,3 +987,104 @@ benar dan password ter-redaksi, profil ter-update, password salah
 ditolak dengan pesan Laravel bawaan, password benar berhasil diubah
 dengan pesan sukses yang (setelah perbaikan poin 6) benar-benar tampil
 di layar.
+
+## D-024 — Backlog QA Phase 10: transisi status enum & file hilang pasca soft-delete
+
+**Konteks:** Dua item backlog yang dicatat di D-021 poin 9 dikerjakan:
+(1) "enum status lain belum diuji jalur transisi tidak-valid"
+(`ChecklistStatus`/`SpjPackageStatus`/`TemplateStatus`/`WorkplanStatus`),
+(2) "file generate/export belum diuji untuk kasus file sumber hilang
+dari disk pasca soft-delete" (`GeneratedDocuments`/`SpjPackages`/
+`Reports`). Riset dilakukan lebih dulu (subagent) sebelum menulis kode
+apapun — hasilnya mengubah scope kedua item secara signifikan,
+dikonfirmasi ke user sebelum eksekusi (AskUserQuestion, dua kali).
+
+### 1. Transisi status — HANYA `SpjPackageStatus` yang punya aturan nyata
+
+Riset menemukan: dari 4 enum, HANYA `SpjPackageStatus` (`Draft` ->
+`Finalized`, satu arah) yang benar-benar dijaga di service
+(`SpjPackageService::assertDraft()`). Tiga lainnya —
+`ChecklistStatus` (Missing/Fulfilled/NotApplicable),
+`TemplateStatus` (Draft/Active/Archived), `WorkplanStatus`
+(Pending/InProgress/Completed, dipakai Milestone+Deliverable) — TIDAK
+PUNYA validasi transisi sama sekali di service manapun; status bisa
+diubah bebas ke nilai apapun. Ditelusuri lagi apakah ada invarian
+bisnis alami yang bisa dijadikan dasar aturan baru untuk ketiganya —
+TIDAK ADA yang ditemukan:
+- `ChecklistStatus`: murni penanda manual (checkbox + status "N/A"),
+  tidak ada kolom yang membedakan "di-set manual" vs "di-set otomatis
+  sistem" untuk dijadikan jangkar aturan.
+- `TemplateStatus`: mengaktifkan kembali versi yang sudah di-*archive*
+  adalah skenario recovery yang SAH (revert ke versi lama), bukan
+  kesalahan yang perlu ditolak.
+- `WorkplanStatus`: status timeline manual milik PM; membalik status
+  (mis. `Completed` -> `Pending`) adalah koreksi input yang wajar,
+  bukan pelanggaran.
+
+**Keputusan: TIDAK membuat aturan transisi baru untuk ketiganya** —
+mengarang FSM tanpa requirement bisnis konkret di baliknya melanggar
+RULE 9 sendiri (`CLAUDE.md`: "setiap fitur harus punya dasar
+requirement"), dan menulis "test transisi tidak valid" untuk aturan
+yang tidak ada tidak menguji apapun. Ini keterbatasan YANG SENGAJA,
+bukan bug — dikonfirmasi eksplisit ke user (opsi "skip, dokumentasikan"
+dipilih setelah sempat memilih "rancang aturan baru" lalu direvert
+setelah melihat tidak ada jangkar konkret per-enum). Kalau nanti ada
+kebutuhan bisnis nyata yang butuh salah satu dari 3 enum ini digerbangi
+(mis. "checklist yang sudah Fulfilled tidak boleh di-unmark tanpa
+approval"), itu keputusan fitur baru terpisah, bukan backlog QA.
+
+Test yang DITAMBAHKAN untuk `SpjPackageStatus`
+(`tests/Feature/SpjPackages/SpjPackageManagementTest.php`) — coverage
+sebelumnya hanya menguji `addEvidence` pasca-final, sekarang lengkap:
+`finalize()` dipanggil dua kali (Finalized -> Finalized ditolak),
+`addDocument()` pasca-final ditolak, `removeItem()` pasca-final
+ditolak.
+
+### 2. File hilang dari disk pasca soft-delete — 2 bug nyata ditemukan & diperbaiki
+
+- **`Reports` TIDAK RELEVAN** — controller-nya (
+  `DownloadProjectSummaryReportController`) selalu men-generate file
+  laporan baru secara sinkron per-request ke file temp yang langsung
+  dihapus setelah dikirim; tidak ada record persisten dengan path
+  tersimpan yang bisa "hilang". Skenario ini secara struktural tidak
+  mungkin terjadi di domain ini.
+- **[Bug] `GeneratedDocuments` download crash 500 mentah** — kalau file
+  fisik hilang dari disk (row Document masih ada, path masih tersimpan)
+  tapi bukan lewat alur hapus resmi (`DocumentGeneratorService::delete()`
+  yang menghapus file+row bersamaan), `Storage::disk()->download()`
+  melempar exception Flysystem (`UnableToRetrieveMetadata`) yang tidak
+  ditangkap di controller — bocor sebagai 500 mentah, bukan 404
+  terkontrol.
+- **[Bug] `SpjPackages` export ZIP/manifest tidak sinkron** —
+  `SpjExportService::export()` memanggil `ZipArchive::addFile()` tanpa
+  mengecek return value (`false` kalau file sumber tidak ada, BUKAN
+  exception) dan tetap menambahkan entry ke `manifest.txt` tanpa
+  syarat — hasilnya ZIP tetap terbentuk & terunduh sukses, tapi entry
+  file itu tidak benar-benar ada di dalamnya sementara manifest tetap
+  mengklaim ada (silent mismatch, tidak crash tapi data cacat).
+- **Perluasan cakupan (dikonfirmasi user)**: pola crash yang sama
+  persis dengan `GeneratedDocuments` ditemukan juga di 2 controller
+  download LAIN di luar 3 domain yang disebut backlog awal —
+  `DownloadDocumentTemplateController` dan `DownloadEvidenceController`
+  (dan turut diperbaiki `DownloadPersonnelDocumentController` yang
+  polanya identik meski tidak eksplisit ditemukan lewat riset backlog
+  ini). Diperbaiki sekaligus karena bug yang SAMA PERSIS, bukan scope
+  creep — membiarkan 3 dari 4 controller download di app ini tetap
+  crash mentah dengan pola identik tidak masuk akal.
+
+**Perbaikan:**
+1. `FileStorageService::download(disk, path, downloadName)` (baru) —
+   titik tunggal: cek `exists()` dulu, `abort(404, ...)` kalau tidak
+   ada, baru `Storage::disk()->download()`. Dipanggil dari SEMUA 4
+   controller download file (`GeneratedDocument` [docx+pdf],
+   `DocumentTemplate`, `Evidence`, `Personnel`) lewat method injection
+   di `__invoke()` — bukan constructor, konsisten dengan pola
+   invokable controller yang sudah ada di app ini.
+2. `SpjExportService::export()` — tambah `Storage::disk($disk)->exists($path)`
+   SEBELUM `addFile()`, dan cek return value `addFile()` — kalau salah
+   satu gagal, item di-skip dari ZIP MAUPUN manifest sekaligus (pola
+   sama seperti item yang document/evidence-nya sudah soft-deleted,
+   yang memang sudah graceful sebelumnya).
+
+**Hasil:** 151 test (10 baru — 2 GeneratedDocuments, 2 DocumentTemplate,
+1 Evidence, 1 Personnel, 4 SpjPackages), `composer ci` bersih.
