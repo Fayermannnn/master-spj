@@ -1215,3 +1215,52 @@ Rp1.980.610.920 menjadi Rp2.100.610.920 di layar, field nilai kontrak
 utama otomatis ter-disable dengan pesan yang tepat.
 
 **Hasil:** 168 test (6 baru), `composer ci` bersih.
+
+## D-027 — Wiring Deliverable ke Document Generator
+
+**Konteks:** Fitur ketiga dari 5 fitur baru — opsi yang sempat diajukan
+tapi belum dipilih di sesi Notification (dicatat "Next Task" di
+PROJECT_HANDOVER.md). Placeholder `deliverable.name` di template
+sebelumnya SELALU diisi teks bebas saat generate dokumen, sama sekali
+tidak terhubung ke `Deliverable` (domain Workplan, dibuat Phase 9,
+D-020) — dua sumber data yang seharusnya sama isinya bisa berbeda
+diam-diam kalau user mengetik ulang/typo.
+
+**Keputusan:**
+
+1. **`documents.deliverable_id`** (migrasi ADDITIVE, RULE 7) — nullable,
+   `nullOnDelete()`. Nullable karena memilih Deliverable bersifat
+   OPSIONAL — project tanpa Deliverable yang cocok (atau requirement
+   yang tidak butuh placeholder ini) tetap bisa generate seperti biasa.
+   `nullOnDelete()` (bukan `cascadeOnDelete()`) karena D-016/D-018:
+   dokumen yang SUDAH digenerate immutable — `data_snapshot` (termasuk
+   nilai `deliverable.name` final) tetap sumber kebenaran untuk file
+   yang sudah jadi, menghapus Deliverable acuannya TIDAK BOLEH
+   menghapus/merusak dokumen yang sudah ada.
+2. **`VariableResolver::resolveScalar()`** dapat parameter baru
+   `?Deliverable $deliverable = null` (bukan menyisip di tengah —
+   ditambah di akhir dengan default, backward compatible untuk 2
+   caller yang sudah ada) — dua placeholder baru terdaftar:
+   `deliverable.name`, `deliverable.target_date`. Pola SAMA PERSIS
+   dengan `payment.*` (D-018): kosakata tertutup, bukan dot-path bebas.
+3. **`GeneratedDocuments\Manager`**: dropdown "Deliverable Terkait" HANYA
+   muncul kalau template ini benar-benar mendeteksi placeholder
+   `deliverable.*` (`needsDeliverableContext()`, sama seperti
+   `needsPaymentContext()`), dan memilihnya cuma MENGISI OTOMATIS kolom
+   `deliverable.name` yang tetap berupa input teks biasa — TIDAK
+   mengunci/disable input itu. User tetap bisa mengetik manual kalau
+   tidak ada Deliverable yang cocok, sama seperti pola `updatedTaxTypeId()`
+   di Contract (D-013): auto-fill sebagai DEFAULT, bukan dipaksakan.
+4. **Validasi cross-project** di `DocumentGeneratorService::generate()` —
+   Deliverable yang dipilih harus `project_id`-nya sama dengan project
+   yang sedang generate dokumen (pola sama D-025: PaymentAllocationService).
+
+**Verifikasi:** 3 test baru mencakup penuh siklus (resolve variable,
+tolak Deliverable lintas-project, alur Livewire lengkap pilih→generate→
+tersimpan). TIDAK diverifikasi ulang secara visual di browser — pola
+UI dropdown-nya identik dengan dropdown Payment yang SUDAH diverifikasi
+di browser pada D-025, dan menyiapkan template DOCX nyata dengan
+placeholder `deliverable.name` lewat upload browser tidak sepadan
+dengan risikonya untuk pola UI yang sudah terbukti.
+
+**Hasil:** 171 test (3 baru), `composer ci` bersih.

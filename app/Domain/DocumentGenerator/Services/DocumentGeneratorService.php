@@ -11,6 +11,7 @@ use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Domain\Shared\Services\FileStorageService;
+use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
@@ -54,6 +55,7 @@ class DocumentGeneratorService
         array $scalarValues,
         ?Payment $payment,
         ?User $generatedBy,
+        ?Deliverable $deliverable = null,
     ): Document {
         if ($template->document_requirement_id !== $requirement->id) {
             throw new DomainActionException('Template yang dipilih tidak sesuai dengan requirement dokumen ini.');
@@ -61,6 +63,10 @@ class DocumentGeneratorService
 
         if ($template->status !== TemplateStatus::Active) {
             throw new DomainActionException('Hanya versi template yang berstatus Aktif yang dapat dipakai untuk generate dokumen.');
+        }
+
+        if ($deliverable !== null && $deliverable->project_id !== $project->id) {
+            throw new DomainActionException('Deliverable yang dipilih harus berasal dari project yang sama.');
         }
 
         $project->loadMissing(['organization', 'client', 'ppkContact', 'contract', 'personnelAssignments.personnel']);
@@ -144,6 +150,7 @@ class DocumentGeneratorService
             'document_requirement_id' => $requirement->id,
             'document_template_id' => $template->id,
             'payment_id' => $payment?->id,
+            'deliverable_id' => $deliverable?->id,
             'version' => $version,
             'name' => $requirement->name,
             'data_snapshot' => $dataSnapshot,

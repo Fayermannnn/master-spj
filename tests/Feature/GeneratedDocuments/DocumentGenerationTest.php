@@ -11,6 +11,7 @@ use App\Domain\Identity\Enums\RoleName;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Livewire\GeneratedDocuments\Manager;
 use App\Models\Contract;
+use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
@@ -278,4 +279,63 @@ it('resolves the payment context into payment.* placeholders when selected', fun
 
     expect($document->payment_id)->toBe($payment->id);
     expect($document->data_snapshot['payment.amount'])->toBe('Rp 150.000.000');
+});
+
+it('links a generated document to a real Deliverable when one is selected', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+
+    $deliverable = Deliverable::factory()->create(['project_id' => $project->id, 'name' => 'Laporan Pendahuluan']);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template,
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => $deliverable->name],
+        null,
+        null,
+        $deliverable,
+    );
+
+    expect($document->deliverable_id)->toBe($deliverable->id);
+    expect($document->data_snapshot['deliverable.name'])->toBe('Laporan Pendahuluan');
+});
+
+it('rejects generating with a deliverable from a different project', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+
+    $otherProject = Project::factory()->create();
+    $deliverable = Deliverable::factory()->create(['project_id' => $otherProject->id]);
+
+    app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template,
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+        $deliverable,
+    );
+})->throws(DomainActionException::class);
+
+it('auto-fills the deliverable.name variable when a Deliverable is selected through the Livewire manager', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $deliverable = Deliverable::factory()->create(['project_id' => $project->id, 'name' => 'Laporan Akhir']);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id)
+        ->set('selectedDeliverableId', $deliverable->id);
+
+    $keys = $component->instance()->tablelessDetectedKeys($template);
+    $deliverableIndex = array_search('deliverable.name', $keys, true);
+
+    expect($component->get('variableInputs')[$deliverableIndex])->toBe('Laporan Akhir');
+
+    $component
+        ->set("variableInputs.{$deliverableIndex}", $deliverable->name)
+        ->call('generate')
+        ->assertHasNoErrors();
+
+    $document = Document::query()->where('project_id', $project->id)->where('document_requirement_id', $requirement->id)->firstOrFail();
+    expect($document->deliverable_id)->toBe($deliverable->id);
 });

@@ -9,6 +9,7 @@ use App\Domain\DocumentGenerator\Services\VariableResolver;
 use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Shared\Exceptions\DomainActionException;
+use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
@@ -48,6 +49,8 @@ class Manager extends Component
 
     public ?string $selectedPaymentId = null;
 
+    public ?string $selectedDeliverableId = null;
+
     /**
      * Cache per-render (BUKAN state Livewire — `private`, tidak
      * disinkronkan lewat wire) supaya tab "Dokumen" tidak menjalankan
@@ -79,9 +82,10 @@ class Manager extends Component
 
         $this->selectedRequirementId = $requirementId;
         $this->selectedPaymentId = null;
+        $this->selectedDeliverableId = null;
 
         $template = $this->activeTemplateFor($requirementId);
-        $this->variableInputs = $this->prefillInputs($template, $resolver, null);
+        $this->variableInputs = $this->prefillInputs($template, $resolver, null, null);
     }
 
     public function updatedSelectedPaymentId(): void
@@ -103,9 +107,35 @@ class Manager extends Component
         }
     }
 
+    /**
+     * Mengisi otomatis `deliverable.*` sebagai DEFAULT saat sebuah
+     * Deliverable dipilih — sama seperti `updatedSelectedPaymentId()`.
+     * User tetap bisa mengetik ulang secara manual sesudahnya (mis.
+     * project tanpa Deliverable yang cocok) — memilih Deliverable
+     * bersifat opsional, bukan wajib (PROJECT_DECISIONS.md D-027).
+     */
+    public function updatedSelectedDeliverableId(): void
+    {
+        if ($this->selectedRequirementId === null) {
+            return;
+        }
+
+        $resolver = app(VariableResolver::class);
+        $template = $this->activeTemplateFor($this->selectedRequirementId);
+        $deliverable = $this->selectedDeliverableId !== null && $this->selectedDeliverableId !== ''
+            ? $this->project->deliverables()->find($this->selectedDeliverableId)
+            : null;
+
+        foreach ($this->tablelessDetectedKeys($template, $resolver) as $index => $key) {
+            if (str_starts_with($key, 'deliverable.')) {
+                $this->variableInputs[$index] = $resolver->resolveScalar($key, $this->project, null, $deliverable) ?? '';
+            }
+        }
+    }
+
     public function closeGenerateForm(): void
     {
-        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId']);
+        $this->reset(['selectedRequirementId', 'variableInputs', 'selectedPaymentId', 'selectedDeliverableId']);
     }
 
     public function generate(DocumentGeneratorService $service): void
@@ -129,6 +159,10 @@ class Manager extends Component
             ? $this->project->payments()->find($this->selectedPaymentId)
             : null;
 
+        $deliverable = $this->selectedDeliverableId !== null && $this->selectedDeliverableId !== ''
+            ? $this->project->deliverables()->find($this->selectedDeliverableId)
+            : null;
+
         /** @var User $user */
         $user = Auth::user();
 
@@ -136,7 +170,7 @@ class Manager extends Component
         $scalarValues = array_combine($keys, array_pad($this->variableInputs, count($keys), ''));
 
         try {
-            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user);
+            $service->generate($this->project, $requirement, $template, $scalarValues, $payment, $user, $deliverable);
             $this->closeGenerateForm();
             session()->flash('status', "Dokumen \"{$requirement->name}\" berhasil digenerate.");
         } catch (DomainActionException $exception) {
@@ -188,6 +222,12 @@ class Manager extends Component
             ->contains(fn (string $key): bool => str_starts_with($key, 'payment.'));
     }
 
+    public function needsDeliverableContext(?DocumentTemplate $template): bool
+    {
+        return collect($this->tablelessDetectedKeys($template))
+            ->contains(fn (string $key): bool => str_starts_with($key, 'deliverable.'));
+    }
+
     /**
      * @return list<string>
      */
@@ -209,10 +249,10 @@ class Manager extends Component
     /**
      * @return list<string>
      */
-    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment): array
+    private function prefillInputs(?DocumentTemplate $template, VariableResolver $resolver, ?Payment $payment, ?Deliverable $deliverable): array
     {
         return array_map(
-            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment) ?? '',
+            fn (string $key): string => $resolver->resolveScalar($key, $this->project, $payment, $deliverable) ?? '',
             $this->tablelessDetectedKeys($template, $resolver),
         );
     }
@@ -240,6 +280,7 @@ class Manager extends Component
         return view('livewire.generated-documents.manager', [
             'items' => $items,
             'payments' => $this->project->payments,
+            'deliverables' => $this->project->deliverables,
         ]);
     }
 }

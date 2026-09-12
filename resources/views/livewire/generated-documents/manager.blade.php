@@ -53,6 +53,19 @@
                         </div>
                     @endif
 
+                    @if ($this->needsDeliverableContext($template))
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Deliverable Terkait (opsional)</label>
+                            <select wire:model.live="selectedDeliverableId" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                                <option value="">— Isi manual di bawah —</option>
+                                @foreach ($deliverables as $deliverable)
+                                    <option value="{{ $deliverable->id }}">{{ $deliverable->name }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-xs text-slate-400">Memilih Deliverable mengisi otomatis kolom "deliverable.name" di bawah — tetap bisa diedit manual.</p>
+                        </div>
+                    @endif
+
                     @foreach ($this->tablelessDetectedKeys($template) as $index => $key)
                         <div>
                             @php $wrappedKey = '{{'.$key.'}}'; @endphp

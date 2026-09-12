@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\DocumentGenerator\Services;
 
+use App\Models\Deliverable;
 use App\Models\Payment;
 use App\Models\PersonnelAssignment;
 use App\Models\Project;
@@ -34,6 +35,7 @@ class VariableResolver
             'client.name', 'client.address', 'ppk.name',
             'provider.name', 'provider.address',
             'payment.amount', 'payment.termin', 'payment.date',
+            'deliverable.name', 'deliverable.target_date',
             'today',
         ];
     }
@@ -52,7 +54,7 @@ class VariableResolver
         ];
     }
 
-    public function resolveScalar(string $key, Project $project, ?Payment $payment): ?string
+    public function resolveScalar(string $key, Project $project, ?Payment $payment, ?Deliverable $deliverable = null): ?string
     {
         return match ($key) {
             'project.name' => $project->name,
@@ -69,6 +71,8 @@ class VariableResolver
             'payment.amount' => $this->formatCurrency($payment?->amount),
             'payment.termin' => $payment !== null ? (string) $payment->termin_number : null,
             'payment.date' => $payment !== null ? $this->formatDate($payment->payment_date ?? $payment->target_date) : null,
+            'deliverable.name' => $deliverable?->name,
+            'deliverable.target_date' => $this->formatDate($deliverable?->target_date),
             'today' => $this->formatDate(Carbon::now()),
             default => null,
         };
