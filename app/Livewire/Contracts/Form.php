@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Livewire\Contracts;
 
+use App\Domain\Contract\Services\ContractAddendumService;
 use App\Domain\Contract\Services\ContractService;
+use App\Domain\Shared\Exceptions\DomainActionException;
+use App\Models\ContractAddendum;
 use App\Models\Project;
 use App\Models\TaxType;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 /**
@@ -37,6 +42,18 @@ class Form extends Component
 
     public string $notes = '';
 
+    public bool $hasContract = false;
+
+    public bool $showAddendumForm = false;
+
+    public string $addendum_number = '';
+
+    public string $addendum_date = '';
+
+    public string $reason = '';
+
+    public string $new_contract_value = '';
+
     public function mount(Project $project): void
     {
         $this->project = $project;
@@ -46,6 +63,7 @@ class Form extends Component
         $contract = $project->contract;
 
         if ($contract) {
+            $this->hasContract = true;
             $this->contract_number = $contract->contract_number;
             $this->contract_date = $contract->contract_date->toDateString();
             $this->spmk_number = (string) $contract->spmk_number;
@@ -121,10 +139,100 @@ class Form extends Component
             $data[$nullableField] = $data[$nullableField] !== '' ? $data[$nullableField] : null;
         }
 
+        // Setelah kontrak ada, nilai kontrak HANYA boleh berubah lewat
+        // alur Adendum (di bawah) — bukan diedit bebas di form ini,
+        // supaya setiap perubahan nilai selalu tercatat alasannya
+        // (PROJECT_DECISIONS.md D-026). Dicek di server, bukan cuma
+        // `disabled` di HTML, karena state Livewire tidak benar-benar
+        // dikunci oleh atribut `disabled` semata.
+        if ($this->hasContract) {
+            unset($data['contract_value']);
+        }
+
         $service->save($this->project, $data);
 
         session()->flash('status', 'Data kontrak berhasil disimpan.');
         $this->project->refresh();
+        $this->contract_value = (string) $this->project->contract?->contract_value;
+    }
+
+    public function openAddendumForm(): void
+    {
+        $this->showAddendumForm = true;
+        $this->reset(['addendum_number', 'addendum_date', 'reason', 'new_contract_value']);
+        $this->resetErrorBag();
+    }
+
+    public function cancelAddendumForm(): void
+    {
+        $this->showAddendumForm = false;
+        $this->reset(['addendum_number', 'addendum_date', 'reason', 'new_contract_value']);
+        $this->resetErrorBag();
+    }
+
+    public function saveAddendum(ContractAddendumService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $contract = $this->project->contract;
+
+        if ($contract === null) {
+            $this->addError('reason', 'Simpan data kontrak terlebih dahulu sebelum menambah adendum.');
+
+            return;
+        }
+
+        $data = $this->validate([
+            'addendum_number' => ['nullable', 'string', 'max:100'],
+            'addendum_date' => ['required', 'date'],
+            'reason' => ['required', 'string', 'max:2000'],
+            'new_contract_value' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        /** @var User $creator */
+        $creator = Auth::user();
+
+        $service->create($contract, [
+            'addendum_number' => $data['addendum_number'] ?: null,
+            'addendum_date' => $data['addendum_date'],
+            'reason' => $data['reason'],
+            'new_value' => $data['new_contract_value'] !== '' ? $data['new_contract_value'] : null,
+        ], $creator);
+
+        $this->project->refresh();
+        $this->contract_value = (string) $this->project->contract?->contract_value;
+        $this->cancelAddendumForm();
+        session()->flash('status', 'Adendum kontrak berhasil ditambahkan.');
+    }
+
+    public function deleteAddendum(string $addendumId, ContractAddendumService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $contract = $this->project->contract;
+        $addendum = $contract?->addenda()->findOrFail($addendumId) ?? abort(404);
+
+        try {
+            $service->delete($addendum);
+            $this->project->refresh();
+            $this->contract_value = (string) $this->project->contract?->contract_value;
+            session()->flash('status', 'Adendum kontrak berhasil dihapus.');
+        } catch (DomainActionException $exception) {
+            session()->flash('addendum_error', $exception->getMessage());
+        }
+    }
+
+    /**
+     * Diurutkan dari yang PALING BARU DIBUAT (bukan `addendum_date`,
+     * yang bisa diisi mundur/tidak berurutan oleh user) — supaya baris
+     * teratas selalu konsisten dengan adendum yang boleh dihapus
+     * (lihat ContractAddendumService::delete()).
+     *
+     * @return Collection<int, ContractAddendum>
+     */
+    public function addenda(): Collection
+    {
+        return $this->project->contract?->addenda()->orderByDesc('id')->get() ?? collect();
     }
 
     public function render(): View

@@ -83,6 +83,96 @@ it('rejects a negative contract value', function (): void {
         ->assertHasErrors(['contract_value']);
 });
 
+it('ignores a contract_value submitted through the main form once a contract already exists', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeContractAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    Contract::factory()->create(['project_id' => $project->id, 'contract_value' => 500_000_000]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['project' => $project])
+        ->set('contract_value', '999999999')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect((float) $project->contract()->first()->contract_value)->toBe(500_000_000.0);
+});
+
+it('adds a contract addendum that updates the effective contract value', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeContractAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    Contract::factory()->create(['project_id' => $project->id, 'contract_value' => 500_000_000]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['project' => $project])
+        ->call('openAddendumForm')
+        ->set('addendum_number', '001/ADD/2026')
+        ->set('addendum_date', '2026-03-01')
+        ->set('reason', 'Perpanjangan waktu dan penambahan nilai pekerjaan')
+        ->set('new_contract_value', '600000000')
+        ->call('saveAddendum')
+        ->assertHasNoErrors();
+
+    $contract = $project->contract()->first();
+    expect((float) $contract->contract_value)->toBe(600_000_000.0);
+    expect($contract->addenda()->count())->toBe(1);
+    expect((float) $contract->addenda()->first()->previous_value)->toBe(500_000_000.0);
+});
+
+it('allows an addendum with no value change (e.g. schedule-only amendment)', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeContractAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    Contract::factory()->create(['project_id' => $project->id, 'contract_value' => 500_000_000]);
+
+    Livewire::actingAs($admin)
+        ->test(Form::class, ['project' => $project])
+        ->call('openAddendumForm')
+        ->set('addendum_date', '2026-03-01')
+        ->set('reason', 'Perpanjangan waktu pelaksanaan 30 hari kalender')
+        ->call('saveAddendum')
+        ->assertHasNoErrors();
+
+    $contract = $project->contract()->first();
+    expect((float) $contract->contract_value)->toBe(500_000_000.0);
+    expect($contract->addenda()->first()->new_value)->toBeNull();
+});
+
+it('only allows deleting the most recent addendum and reverts the contract value', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makeContractAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $contract = Contract::factory()->create(['project_id' => $project->id, 'contract_value' => 500_000_000]);
+
+    $component = Livewire::actingAs($admin)->test(Form::class, ['project' => $project]);
+
+    $component->call('openAddendumForm')
+        ->set('addendum_date', '2026-01-01')
+        ->set('reason', 'Adendum pertama')
+        ->set('new_contract_value', '600000000')
+        ->call('saveAddendum');
+
+    $component->call('openAddendumForm')
+        ->set('addendum_date', '2026-02-01')
+        ->set('reason', 'Adendum kedua')
+        ->set('new_contract_value', '700000000')
+        ->call('saveAddendum');
+
+    // Diurutkan dari yang PALING BARU DIBUAT (bukan addendum_date) —
+    // lihat ContractAddendumService::delete().
+    $latest = $contract->addenda()->orderByDesc('id')->firstOrFail();
+    $oldest = $contract->addenda()->orderBy('id')->firstOrFail();
+
+    $component->call('deleteAddendum', $latest->id);
+    expect((float) $project->contract()->first()->contract_value)->toBe(600_000_000.0);
+    expect($contract->addenda()->count())->toBe(1);
+
+    $component->call('deleteAddendum', $oldest->id);
+    expect((float) $project->contract()->first()->contract_value)->toBe(500_000_000.0);
+    expect($contract->addenda()->count())->toBe(0);
+});
+
 it('prevents a member from another organization from managing the contract on someone else\'s project', function (): void {
     $organization = Organization::factory()->create();
     $project = Project::factory()->create(['organization_id' => $organization->id]);

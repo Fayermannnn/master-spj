@@ -1143,3 +1143,75 @@ ke Termin 1, laporan realisasi menunjukkan kategori "Pencetakan" 143%
 benar.
 
 **Hasil:** 162 test (11 baru), `composer ci` bersih.
+
+## D-026 — Riwayat Amandemen Kontrak (`contract_addenda`)
+
+**Konteks:** Fitur kedua dari 5 fitur baru. `Contract` sebelumnya
+hanya mencerminkan nilai TERKINI, tanpa jejak — kalau nilai kontrak
+berubah (perpanjangan waktu, pekerjaan tambah), field `contract_value`
+cukup ditimpa lewat form yang sama tanpa ada yang mencatat kenapa/kapan
+berubah. Wajar terjadi di proyek konsultansi/pemerintah nyata (adendum/
+amandemen), tapi tidak ada jejaknya sama sekali di sistem.
+
+**Keputusan:**
+
+1. **`ContractAddendum`** menyimpan snapshot `previous_value`/
+   `new_value` (bukan sumber kebenaran — nilai efektif kontrak TETAP
+   `Contract.contract_value`), `reason` (bebas, bukan enum tertutup —
+   alasan adendum terlalu beragam untuk ditutup jadi pilihan tetap),
+   `addendum_number`/`addendum_date` opsional-required sesuai lazimnya
+   dokumen resmi. Nama tabel HARUS dinyatakan eksplisit
+   (`protected $table = 'contract_addenda'`) — pluralisasi Eloquent
+   bawaan dari nama kelas `ContractAddendum` menghasilkan
+   `contract_addendums`, bukan `contract_addenda` yang benar secara
+   Latin.
+2. **`ContractAddendumService::create()` menerapkan nilai baru
+   SEKALIGUS mencatat riwayat** — begitu adendum dibuat dan
+   menyertakan `new_value`, `Contract.contract_value` langsung
+   diperbarui ke nilai itu dalam transaksi yang sama. `new_value`
+   SENGAJA nullable — adendum yang hanya mengubah durasi/lingkup tanpa
+   mengubah nilai (schedule-only amendment) tetap valid dicatat.
+3. **Nilai kontrak TIDAK BISA lagi diedit bebas lewat form kontrak
+   utama** setelah kontrak ada — field `contract_value` dibuat
+   `disabled` di UI DAN nilainya di-`unset()` dari data sebelum dikirim
+   ke `ContractService::save()` di server (dicek di server, bukan
+   cuma atribut HTML `disabled`, karena state komponen Livewire tidak
+   benar-benar terkunci oleh itu). Perubahan nilai kontrak HANYA lewat
+   alur Adendum. Test lama yang sebelumnya submit `contract_value`
+   lewat form utama saat mengedit kontrak yang sudah ada TETAP LULUS
+   tanpa modifikasi (kebetulan tidak pernah meng-assert nilai akhir
+   `contract_value` pada kasus itu) — ditambah test baru yang secara
+   eksplisit membuktikan submit itu diabaikan.
+4. **Hanya adendum TERAKHIR (urutan DIBUAT, bukan `addendum_date` yang
+   bisa diisi mundur user) yang boleh dihapus** — mencegah riwayat
+   berlubang di tengah. Diurutkan lewat ULID (`orderByDesc('id')`),
+   BUKAN `created_at` — dua adendum yang dibuat dalam detik yang sama
+   (nyata terjadi di test, berpotensi juga di alur nyata yang cepat)
+   membuat `latest('created_at')` tidak reliable untuk tie-breaking;
+   ULID sortable natural dan presisinya jauh lebih halus. Menghapus
+   adendum terakhir mengembalikan `contract_value` ke
+   `previous_value`-nya (bukan hard-delete riwayat tanpa efek).
+   Daftar adendum di UI diurutkan dengan kunci yang SAMA (bukan
+   `addendum_date`) supaya baris teratas selalu konsisten dengan yang
+   benar-benar boleh dihapus.
+5. **Ditemukan lewat proses, dicatat untuk sesi mendatang**: phpstan
+   sempat melaporkan "undefined property" untuk `new_value`/
+   `previous_value` pada `ContractAddendum` padahal `casts()`-nya
+   sudah benar dan polanya identik dengan model lain yang tidak
+   bermasalah (mis. `Payment::amount`) — `composer dump-autoload`
+   TIDAK memperbaikinya (sempat dicoba, bukan penyebabnya). Yang
+   benar-benar menyelesaikan: anotasi `@property float|null` eksplisit
+   di docblock kelas model, solusi standar phpstan.org untuk error
+   identifier `property.notFound` saat `parseModelCastsMethod`
+   (larastan) tidak berhasil menebak sendiri. Penyebab pasti kenapa
+   auto-detect gagal khusus untuk model ini tidak ditelusuri lebih
+   jauh (RULE 67) — kalau enum/model baru lain mengalami hal serupa,
+   `@property` di docblock kelas adalah solusinya, bukan
+   `@phpstan-ignore` atau `@var` inline.
+
+**Verifikasi:** diverifikasi end-to-end di browser dengan data seed
+reference project — tambah adendum mengubah nilai kontrak dari
+Rp1.980.610.920 menjadi Rp2.100.610.920 di layar, field nilai kontrak
+utama otomatis ter-disable dengan pesan yang tepat.
+
+**Hasil:** 168 test (6 baru), `composer ci` bersih.

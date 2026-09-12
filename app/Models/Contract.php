@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -55,5 +56,13 @@ class Contract extends Model
     public function taxType(): BelongsTo
     {
         return $this->belongsTo(TaxType::class);
+    }
+
+    /**
+     * @return HasMany<ContractAddendum, $this>
+     */
+    public function addenda(): HasMany
+    {
+        return $this->hasMany(ContractAddendum::class);
     }
 }
