@@ -86,6 +86,13 @@
             </button>
             <button
                 type="button"
+                wire:click="setTab('realization')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'realization' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Realisasi Anggaran
+            </button>
+            <button
+                type="button"
                 wire:click="setTab('checklist')"
                 class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'checklist' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
             >
@@ -159,6 +166,8 @@
         <livewire:project-cost.manager :project="$project" :key="'cost-'.$project->id" />
     @elseif ($activeTab === 'payments')
         <livewire:project-payments.manager :project="$project" :key="'payments-'.$project->id" />
+    @elseif ($activeTab === 'realization')
+        <livewire:project-budget-realization.manager :project="$project" :key="'realization-'.$project->id" />
     @elseif ($activeTab === 'checklist')
         <livewire:project-checklist.manager :project="$project" :key="'checklist-'.$project->id" />
     @elseif ($activeTab === 'documents')

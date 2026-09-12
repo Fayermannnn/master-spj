@@ -109,6 +109,60 @@
                         @endforeach
                     </div>
                 @endif
+
+                <div class="mt-3 border-t border-slate-100 pt-3">
+                    <button type="button" wire:click="toggleAllocations('{{ $payment->id }}')" class="text-xs font-medium text-blue-600 hover:underline">
+                        {{ $expandedPaymentId === $payment->id ? 'Sembunyikan alokasi biaya' : 'Alokasi biaya ('.$this->allocationsFor($payment)->count().')' }}
+                    </button>
+
+                    @if ($expandedPaymentId === $payment->id)
+                        <div class="mt-3 space-y-3">
+                            @forelse ($this->allocationsFor($payment) as $allocation)
+                                <div wire:key="allocation-{{ $allocation->id }}" class="flex items-center justify-between rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+                                    <div>
+                                        <p class="font-medium text-slate-700">{{ $allocation->costItem->description }}</p>
+                                        <p class="text-slate-400">{{ $allocation->costItem->category->name }} &middot; Rp {{ number_format((float) $allocation->amount, 0, ',', '.') }}</p>
+                                        @if ($allocation->notes)
+                                            <p class="text-slate-400">{{ $allocation->notes }}</p>
+                                        @endif
+                                    </div>
+                                    <button
+                                        type="button"
+                                        wire:click="removeAllocation('{{ $payment->id }}', '{{ $allocation->id }}')"
+                                        wire:confirm="Hapus alokasi ini?"
+                                        class="text-red-600 hover:underline"
+                                    >
+                                        Hapus
+                                    </button>
+                                </div>
+                            @empty
+                                <p class="text-xs text-slate-400">Belum ada alokasi biaya untuk termin ini.</p>
+                            @endforelse
+
+                            <form wire:submit="allocate('{{ $payment->id }}')" class="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                                <div class="sm:col-span-2">
+                                    <select wire:model="allocation_cost_item_id" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+                                        <option value="">Pilih item biaya…</option>
+                                        @foreach ($this->costItemOptions() as $costItem)
+                                            <option value="{{ $costItem->id }}">{{ $costItem->description }} ({{ $costItem->category->name }})</option>
+                                        @endforeach
+                                    </select>
+                                    @error('allocation_cost_item_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <input wire:model="allocation_amount" type="number" step="0.01" placeholder="Nominal (Rp)" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+                                    @error('allocation_amount') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="flex gap-2">
+                                    <input wire:model="allocation_notes" type="text" placeholder="Catatan (opsional)" class="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+                                    <button type="submit" class="whitespace-nowrap rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
+                                        + Alokasi
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    @endif
+                </div>
             </div>
         @empty
             <div class="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">

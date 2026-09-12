@@ -6,6 +6,7 @@ use App\Domain\Identity\Enums\RoleName;
 use App\Domain\Payment\Enums\PaymentStatus;
 use App\Livewire\ProjectPayments\Manager;
 use App\Models\Contract;
+use App\Models\CostItem;
 use App\Models\Organization;
 use App\Models\Payment;
 use App\Models\Project;
@@ -109,6 +110,54 @@ it('prevents two termin from sharing the same termin_number on one project', fun
         ->set('amount', '10000000')
         ->call('save')
         ->assertHasErrors(['termin_number']);
+});
+
+it('allocates a payment to a cost item through the Livewire manager and rejects over-allocation', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makePaymentAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $payment = Payment::factory()->create(['project_id' => $project->id, 'termin_number' => 1, 'amount' => 5_000_000]);
+    $costItem = CostItem::factory()->create(['project_id' => $project->id]);
+
+    $component = Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('toggleAllocations', $payment->id)
+        ->set('allocation_cost_item_id', $costItem->id)
+        ->set('allocation_amount', '3000000')
+        ->call('allocate', $payment->id)
+        ->assertHasNoErrors();
+
+    expect($payment->allocations()->count())->toBe(1);
+
+    $component
+        ->set('allocation_cost_item_id', $costItem->id)
+        ->set('allocation_amount', '3000000')
+        ->call('allocate', $payment->id)
+        ->assertHasErrors(['allocation_amount']);
+
+    expect($payment->allocations()->count())->toBe(1);
+});
+
+it('removes a payment allocation through the Livewire manager', function (): void {
+    $organization = Organization::factory()->create();
+    $admin = makePaymentAdmin($organization);
+    $project = Project::factory()->create(['organization_id' => $organization->id]);
+    $payment = Payment::factory()->create(['project_id' => $project->id, 'termin_number' => 1, 'amount' => 5_000_000]);
+    $costItem = CostItem::factory()->create(['project_id' => $project->id]);
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->set('allocation_cost_item_id', $costItem->id)
+        ->set('allocation_amount', '3000000')
+        ->call('allocate', $payment->id);
+
+    $allocation = $payment->allocations()->firstOrFail();
+
+    Livewire::actingAs($admin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('removeAllocation', $payment->id, $allocation->id);
+
+    expect($payment->allocations()->count())->toBe(0);
 });
 
 it('prevents a member from another organization from managing payments on someone else\'s project', function (): void {

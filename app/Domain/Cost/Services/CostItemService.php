@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Cost\Services;
 
 use App\Domain\AuditLog\Services\AuditLogService;
+use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Models\CostItem;
 use App\Models\Project;
 use App\Models\TaxType;
@@ -52,6 +53,12 @@ class CostItemService
 
     public function delete(CostItem $costItem): void
     {
+        if ($costItem->allocations()->exists()) {
+            throw new DomainActionException(
+                "Item biaya \"{$costItem->description}\" sudah memiliki alokasi pembayaran dan tidak dapat dihapus. Hapus alokasinya terlebih dahulu."
+            );
+        }
+
         $before = $costItem->getAttributes();
 
         $costItem->delete();

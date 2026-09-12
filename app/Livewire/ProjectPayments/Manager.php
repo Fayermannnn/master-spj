@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Livewire\ProjectPayments;
 
 use App\Domain\Payment\Enums\PaymentStatus;
+use App\Domain\Payment\Services\PaymentAllocationService;
 use App\Domain\Payment\Services\PaymentService;
 use App\Domain\Shared\Exceptions\DomainActionException;
+use App\Models\CostItem;
 use App\Models\Payment;
+use App\Models\PaymentItem;
 use App\Models\Project;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -40,6 +44,14 @@ class Manager extends Component
     public bool $override_limit = false;
 
     public string $notes = '';
+
+    public ?string $expandedPaymentId = null;
+
+    public string $allocation_cost_item_id = '';
+
+    public string $allocation_amount = '';
+
+    public string $allocation_notes = '';
 
     public function mount(Project $project): void
     {
@@ -155,6 +167,64 @@ class Manager extends Component
         $targets = PaymentStatus::allowedTransitions()[$payment->status->value];
 
         return array_map(fn (string $value) => PaymentStatus::from($value), $targets);
+    }
+
+    public function toggleAllocations(string $paymentId): void
+    {
+        $this->expandedPaymentId = $this->expandedPaymentId === $paymentId ? null : $paymentId;
+        $this->reset(['allocation_cost_item_id', 'allocation_amount', 'allocation_notes']);
+        $this->resetErrorBag();
+    }
+
+    public function allocate(string $paymentId, PaymentAllocationService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $payment = $this->project->payments()->findOrFail($paymentId);
+
+        $data = $this->validate([
+            'allocation_cost_item_id' => ['required', 'ulid', 'exists:cost_items,id'],
+            'allocation_amount' => ['required', 'numeric', 'min:0.01'],
+            'allocation_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $costItem = $this->project->costItems()->findOrFail((string) $data['allocation_cost_item_id']);
+
+        try {
+            $service->allocate($payment, $costItem, (float) $data['allocation_amount'], $data['allocation_notes'] ?: null);
+            $this->reset(['allocation_cost_item_id', 'allocation_amount', 'allocation_notes']);
+            session()->flash('status', 'Alokasi biaya berhasil ditambahkan.');
+        } catch (DomainActionException $exception) {
+            $this->addError('allocation_amount', $exception->getMessage());
+        }
+    }
+
+    public function removeAllocation(string $paymentId, string $allocationId, PaymentAllocationService $service): void
+    {
+        $this->authorize('update', $this->project);
+
+        $payment = $this->project->payments()->findOrFail($paymentId);
+        $allocation = $payment->allocations()->findOrFail($allocationId);
+
+        $service->removeAllocation($allocation);
+
+        session()->flash('status', 'Alokasi biaya berhasil dihapus.');
+    }
+
+    /**
+     * @return Collection<int, CostItem>
+     */
+    public function costItemOptions(): Collection
+    {
+        return $this->project->costItems()->with('category')->orderBy('description')->get();
+    }
+
+    /**
+     * @return Collection<int, PaymentItem>
+     */
+    public function allocationsFor(Payment $payment): Collection
+    {
+        return $payment->allocations()->with('costItem.category')->get();
     }
 
     public function render(): View

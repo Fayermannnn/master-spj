@@ -1088,3 +1088,58 @@ ditolak.
 
 **Hasil:** 151 test (10 baru — 2 GeneratedDocuments, 2 DocumentTemplate,
 1 Evidence, 1 Personnel, 4 SpjPackages), `composer ci` bersih.
+
+## D-025 — Payment Item Allocation (`payment_items`) + Laporan Realisasi Anggaran per Kategori
+
+**Konteks:** Fitur pertama dari 5 fitur baru yang diminta user (lihat
+riwayat chat). `payment_items` sudah disebut eksplisit di daftar
+entitas database blueprint (§8) sejak Phase 0, tapi tidak pernah
+dibuat — `Payment` (termin) dan `CostItem` (rincian anggaran) berdiri
+sendiri-sendiri, tanpa penghubung. Tanpa link ini, sistem tidak bisa
+menjawab pertanyaan paling dasar SPJ: berapa persen anggaran kategori
+X sudah terealisasi?
+
+**Keputusan:**
+
+1. **`PaymentItem`** (baru) menghubungkan satu `Payment` ke satu
+   `CostItem` dengan nominal alokasi — bukan polymorphic, FK eksplisit
+   ke dua sisi (pola sama D-019: hindari polymorphic relation). Tidak
+   soft-delete (baris alokasi ringan, sama seperti `SpjItem`).
+   `cost_item_id` pakai `restrictOnDelete()` (DB) + guard eksplisit di
+   `CostItemService::delete()` (pola sama Personnel/DocumentTemplate) —
+   menghapus CostItem yang sudah dialokasikan akan diam-diam merusak
+   angka realisasi kalau tidak dicegah di kedua level.
+2. **`PaymentAllocationService::allocate()`** memvalidasi: (a) CostItem
+   dan Payment harus dari project yang SAMA (integritas data lintas
+   project), (b) tidak boleh dialokasikan dua kali ke termin yang sama
+   (hapus dulu untuk mengubah nominal, tidak ada method update — pola
+   sama `SpjPackageService::addDocument`/`removeItem`, tanpa update
+   in-place), (c) total alokasi pada SATU termin tidak boleh melebihi
+   nominal termin itu sendiri (baru menghitung: tidak logis
+   mengalokasikan lebih dari yang benar-benar tersedia di termin ini).
+3. **SENGAJA TIDAK ADA batas dari sisi CostItem** (realisasi tidak
+   dibatasi terhadap sisa anggaran item) — realisasi melebihi 100%
+   adalah sinyal yang SEHARUSNYA terlihat di laporan (kelebihan
+   pembayaran terhadap rencana), bukan sesuatu yang perlu diblokir
+   sepihak di titik input (RULE 67, jangan menambah aturan yang tidak
+   diminta).
+4. **`BudgetRealizationService`** (domain baru: Cost) menghitung
+   anggaran (sum `CostItem.total` per kategori) vs realisasi (sum
+   `PaymentItem.amount` yang dialokasikan ke CostItem kategori
+   tersebut) — TANPA N+1 (satu query `groupBy` untuk realisasi, satu
+   query `whereIn` untuk nama kategori, bukan lookup per-row).
+   Ditampilkan sebagai tab baru "Realisasi Anggaran" di `Projects\Show`
+   (read-only, hanya butuh `view` bukan `update` — tidak ada aksi tulis
+   di tab ini, alokasi ditulis lewat tab "Termin").
+5. **UI alokasi** ditambahkan langsung ke `ProjectPayments\Manager`
+   yang sudah ada (expand per baris termin) — BUKAN komponen/tab baru
+   terpisah, karena alokasi adalah sub-aksi dari termin, bukan
+   entitas mandiri yang butuh halaman sendiri.
+
+**Verifikasi:** diverifikasi end-to-end sungguhan di browser (bukan
+cuma test) dengan data seed reference project — alokasi 2 item biaya
+ke Termin 1, laporan realisasi menunjukkan kategori "Pencetakan" 143%
+(over-realization, ditandai warna amber) dan "Perjalanan" 0% dengan
+benar.
+
+**Hasil:** 162 test (11 baru), `composer ci` bersih.
