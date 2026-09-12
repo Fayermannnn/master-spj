@@ -9,6 +9,7 @@ use App\Domain\DocumentGenerator\Contracts\PdfConverterInterface;
 use App\Domain\DocumentRequirement\Enums\ChecklistStatus;
 use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
+use App\Domain\Settings\Services\NumberingService;
 use App\Domain\Shared\Exceptions\DomainActionException;
 use App\Domain\Shared\Services\FileStorageService;
 use App\Models\Deliverable;
@@ -43,6 +44,7 @@ class DocumentGeneratorService
         private readonly PdfConverterInterface $pdfConverter,
         private readonly AuditLogService $auditLog,
         private readonly ChecklistService $checklistService,
+        private readonly NumberingService $numberingService,
     ) {}
 
     /**
@@ -70,6 +72,19 @@ class DocumentGeneratorService
         }
 
         $project->loadMissing(['organization', 'client', 'ppkContact', 'contract', 'personnelAssignments.personnel']);
+
+        // `document.number` TIDAK PERNAH datang dari form (lihat
+        // VariableResolver::reservedKeys()) — di-inject di sini,
+        // SATU-SATUNYA tempat yang benar-benar menaikkan counter
+        // organisasi (PROJECT_DECISIONS.md D-029). null kalau
+        // organisasi belum mengonfigurasi NumberingSetting sama sekali
+        // (fitur opt-in) ATAU template tidak memakai placeholder ini.
+        $documentNumber = null;
+
+        if (in_array('document.number', $template->detected_variables ?? [], true)) {
+            $documentNumber = $this->numberingService->nextNumber($project->organization);
+            $scalarValues['document.number'] = $documentNumber ?? '';
+        }
 
         $tables = $this->resolveApplicableTables($template, $project);
 
@@ -151,6 +166,7 @@ class DocumentGeneratorService
             'document_template_id' => $template->id,
             'payment_id' => $payment?->id,
             'deliverable_id' => $deliverable?->id,
+            'number' => $documentNumber,
             'version' => $version,
             'name' => $requirement->name,
             'data_snapshot' => $dataSnapshot,

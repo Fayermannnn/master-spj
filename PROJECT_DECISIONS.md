@@ -1333,3 +1333,68 @@ ini) memblokir klik otomatis — bukan bug, keterbatasan tooling
 verifikasi, bukan kode.
 
 **Hasil:** 180 test (9 baru), `composer ci` bersih.
+
+## D-029 — Penomoran Dokumen per Organisasi (mengisi domain Settings)
+
+**Konteks:** Fitur kelima (terakhir) dari 5 fitur baru — mengisi
+`app/Domain/Settings` yang sejak Phase 0 cuma README. Gap nyata:
+dokumen yang di-generate tidak punya nomor surat resmi (mis.
+"001/SPJ/ORG/IX/2026") yang lazim di administrasi Indonesia — tidak
+ada cara mengisi ini selain mengetik manual di luar sistem.
+
+**Keputusan:**
+
+1. **Satu `NumberingSetting` PER ORGANISASI** (bukan per jenis
+   dokumen) — SENGAJA disederhanakan (RULE 67) mengikuti kelaziman
+   "nomor surat keluar" satu organisasi: satu penomoran berurutan
+   untuk SEMUA dokumen, terlepas jenisnya. Kalau nanti ada kebutuhan
+   nyata penomoran per jenis dokumen, itu perluasan terpisah, bukan
+   diasumsikan sekarang.
+2. **Kosakata token TERTUTUP** (`{seq}`, `{org}`, `{month}`,
+   `{month_roman}`, `{year}`) — pola sama `VariableResolver`
+   (D-015/D-018), BUKAN template engine bebas/`sprintf` mentah dari
+   input admin (yang akan jadi celah kalau formatnya diproses lewat
+   `eval`-like mechanism apapun).
+3. **`document.number` adalah placeholder RESERVED** — beda dari
+   `payment.*`/`deliverable.*` yang auto-fill sebagai DEFAULT tapi
+   tetap bisa diedit manual di form generate, `document.number` TIDAK
+   PERNAH muncul sebagai input teks bebas (`VariableResolver::reservedKeys()`,
+   difilter dari `tablelessDetectedKeys()`) — nomor surat resmi tidak
+   boleh bisa diketik sembarangan oleh user. Nilainya HANYA di-inject
+   `DocumentGeneratorService::generate()` sendiri, satu-satunya tempat
+   yang menaikkan counter organisasi.
+4. **`NumberingService::nextNumber()` transaksional dengan
+   `lockForUpdate()`** — dua dokumen yang di-generate nyaris bersamaan
+   tidak boleh pernah mendapat nomor urut yang sama. Fitur OPT-IN:
+   organisasi tanpa `NumberingSetting` dikonfigurasi tetap bisa
+   generate dokumen seperti biasa, `document.number` cuma kosong kalau
+   template memakainya (backward compatible, additive).
+5. **Reset periode (`never`/`yearly`/`monthly`)** dicek lewat
+   `last_reset_period_key` (mis. "2026" untuk yearly) dibanding period
+   berjalan — bukan job terjadwal yang mengubah data diam-diam (pola
+   sama alasan D-020: "Terlambat" dihitung dinamis, bukan disimpan).
+6. **Halaman "Penomoran Dokumen" SELF-SERVICE** — SELALU beroperasi
+   terhadap `Auth::user()->organization`, TIDAK PERNAH menerima
+   organization ID dari route (pola sama `Profile\Edit`, D-023 — tidak
+   ada celah IDOR). Otorisasi REUSE `OrganizationPolicy::update`
+   (bukan permission baru) — ability itu sudah persis mendefinisikan
+   "admin_perusahaan boleh mengelola organisasinya sendiri". Nav link
+   di sidebar disembunyikan otomatis untuk user tanpa organisasi
+   (super_admin) via `@if (organization !== null)`.
+7. **`previewNext()` terpisah dari `nextNumber()`** — TIDAK menaikkan
+   counter, dipakai UI pengaturan untuk pratinjau LIVE saat admin
+   masih mengetik format (dibangun dari `NumberingSetting` in-memory
+   yang belum disimpan) — mencegah preview di layar diam-diam
+   membakar nomor urut sungguhan.
+
+**Verifikasi:** diverifikasi end-to-end SUNGGUHAN di browser — ubah
+format, lihat pratinjau live berubah ("001/SPJ/DEMO-KONSULTAN/IX/2026"
+→ "001/SPJ-RSPNDD/DEMO-KONSULTAN/2026"), simpan, pesan sukses tampil,
+nav link tersedia. 12 test baru (NumberingService format/reset/preview,
+NumberingSettingService upsert, injeksi ke DocumentGeneratorService,
+placeholder tidak muncul sebagai input edit, akses self-service +
+penolakan role lain + 404 untuk user tanpa organisasi).
+
+**Hasil:** 192 test (12 baru), `composer ci` bersih. Ini fitur
+TERAKHIR dari 5 fitur yang diminta user — lihat PROJECT_HANDOVER.md
+untuk ringkasan keseluruhan.

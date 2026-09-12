@@ -108,6 +108,14 @@
                                 Pengguna
                             </x-nav-link>
 
+                            @if (auth()->user()->organization !== null)
+                                @can('update', auth()->user()->organization)
+                                    <x-nav-link :href="route('settings.document-numbering')" :active="request()->routeIs('settings.*')">
+                                        Penomoran Dokumen
+                                    </x-nav-link>
+                                @endcan
+                            @endif
+
                             @can('viewAny', \App\Models\AuditLog::class)
                                 <x-nav-link :href="route('audit-logs.index')" :active="request()->routeIs('audit-logs.*')">
                                     Audit Log

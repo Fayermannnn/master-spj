@@ -15,6 +15,7 @@ use App\Models\Deliverable;
 use App\Models\Document;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentTemplate;
+use App\Models\NumberingSetting;
 use App\Models\Organization;
 use App\Models\Payment;
 use App\Models\Personnel;
@@ -338,4 +339,56 @@ it('auto-fills the deliverable.name variable when a Deliverable is selected thro
 
     $document = Document::query()->where('project_id', $project->id)->where('document_requirement_id', $requirement->id)->firstOrFail();
     expect($document->deliverable_id)->toBe($deliverable->id);
+});
+
+it('injects an auto-generated document number when the template detects the placeholder', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['document.number'])]);
+    NumberingSetting::factory()->create([
+        'organization_id' => $project->organization_id,
+        'format_template' => '{seq}/SPJ/{org}/{year}',
+        'reset_period' => 'never',
+        'next_sequence' => 1,
+    ]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+    );
+
+    expect($document->number)->not->toBeNull();
+    expect($document->data_snapshot['document.number'])->toBe($document->number);
+});
+
+it('leaves the document number null when the organization has no numbering setting', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['document.number'])]);
+
+    $document = app(DocumentGeneratorService::class)->generate(
+        $project,
+        $requirement,
+        $template->fresh(),
+        ['project.name' => 'A', 'client.address' => 'B', 'deliverable.name' => 'C'],
+        null,
+        null,
+    );
+
+    expect($document->number)->toBeNull();
+});
+
+it('does not render document.number as an editable input in the generate form', function (): void {
+    ['project' => $project, 'requirement' => $requirement, 'template' => $template, 'user' => $user] = buildGenerationScenario();
+    $template->update(['detected_variables' => array_merge($template->detected_variables, ['document.number'])]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('openGenerateForm', $requirement->id);
+
+    $keys = $component->instance()->tablelessDetectedKeys($template->fresh());
+
+    expect($keys)->not->toContain('document.number');
 });

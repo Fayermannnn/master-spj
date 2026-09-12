@@ -53,6 +53,12 @@
                         </div>
                     @endif
 
+                    @if ($this->needsDocumentNumber($template))
+                        <p class="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                            Placeholder "document.number" akan diisi otomatis dari nomor urut organisasi saat dokumen ini digenerate — tidak bisa diisi manual.
+                        </p>
+                    @endif
+
                     @if ($this->needsDeliverableContext($template))
                         <div>
                             <label class="mb-1 block text-xs font-medium text-slate-500">Deliverable Terkait (opsional)</label>

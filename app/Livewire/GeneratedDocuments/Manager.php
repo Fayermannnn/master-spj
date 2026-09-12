@@ -243,7 +243,16 @@ class Manager extends Component
         /** @var list<string> $detected */
         $detected = array_map(strval(...), $template->detected_variables ?? []);
 
-        return array_values(array_diff($detected, $tableKeys));
+        return array_values(array_diff($detected, $tableKeys, $resolver->reservedKeys()));
+    }
+
+    public function needsDocumentNumber(?DocumentTemplate $template): bool
+    {
+        if ($template === null) {
+            return false;
+        }
+
+        return in_array('document.number', $template->detected_variables ?? [], true);
     }
 
     /**

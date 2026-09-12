@@ -23,6 +23,7 @@ use App\Livewire\Profile;
 use App\Livewire\Projects;
 use App\Livewire\ProjectTypes;
 use App\Livewire\Reports;
+use App\Livewire\Settings;
 use App\Livewire\TaxTypes;
 use App\Livewire\TemplateVariables;
 use App\Livewire\Users;
@@ -108,4 +109,6 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/audit-logs', AuditLogs\Index::class)->name('audit-logs.index');
 
     Route::get('/profile', Profile\Edit::class)->name('profile.edit');
+
+    Route::get('/settings/document-numbering', Settings\DocumentNumbering::class)->name('settings.document-numbering');
 });

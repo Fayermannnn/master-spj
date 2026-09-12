@@ -36,8 +36,26 @@ class VariableResolver
             'provider.name', 'provider.address',
             'payment.amount', 'payment.termin', 'payment.date',
             'deliverable.name', 'deliverable.target_date',
+            'document.number',
             'today',
         ];
+    }
+
+    /**
+     * Placeholder yang TIDAK PERNAH diisi manual/ditampilkan sebagai
+     * input teks bebas di form generate — nilainya di-inject otomatis
+     * oleh `DocumentGeneratorService` sendiri saat generate (`{{
+     * document.number }}` dari `NumberingService`, lihat
+     * PROJECT_DECISIONS.md D-029). Beda dari `payment.*`/
+     * `deliverable.*` yang auto-fill sebagai DEFAULT tapi tetap bisa
+     * diedit manual — nomor surat resmi TIDAK BOLEH bisa diketik bebas
+     * user.
+     *
+     * @return list<string>
+     */
+    public function reservedKeys(): array
+    {
+        return ['document.number'];
     }
 
     /**
