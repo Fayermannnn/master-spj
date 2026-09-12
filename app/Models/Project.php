@@ -120,4 +120,12 @@ class Project extends Model
     {
         return $this->hasMany(Payment::class);
     }
+
+    /**
+     * @return HasMany<ProjectChecklistItem, $this>
+     */
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(ProjectChecklistItem::class);
+    }
 }

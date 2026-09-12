@@ -5,138 +5,136 @@ lanjut tanpa kehilangan konteks.
 
 ## Current Phase
 
-**Phase 4 — Cost & Payment: SELESAI.** Siap lanjut ke **Phase 5 —
-Document Requirement Engine** (kebutuhan dokumen SPJ berbasis rule).
+**Phase 5 — Document Requirement Engine: SELESAI.** Siap lanjut ke
+**Phase 6 — Document Template** (upload template DOCX, deteksi
+placeholder, versioning).
 
 ## Completed Features
 
-### Phase 1-3 (ringkas — detail di git log / PROJECT_DECISIONS.md)
+### Phase 1-4 (ringkas — detail di git log / PROJECT_DECISIONS.md)
 Auth, RBAC, Organization, User Management, ProjectType, Client+Contact,
 Project (status siklus), Contract, PersonnelCategory, Personnel (+
-dokumen via FileStorageService), PersonnelAssignment.
+dokumen), PersonnelAssignment, TaxType, CostCategory, CostItem, Payment.
 
-### Phase 4 (baru)
+### Phase 5 (baru) — Document Requirement Engine
 
-- **TaxType** — master data GLOBAL (pola sama seperti ProjectType/
-  PersonnelCategory/CostCategory), hanya super_admin
-  (`tax_types.manage`) yang mengelola. Seed baseline: PPN 11%, PPh 21 5%,
-  PPh 23 2%, Tidak Kena Pajak 0%.
-- **CostCategory** — master data GLOBAL, 12 kategori baseline sesuai §13
-  master prompt (Personil, Non-Personil, Perjalanan, Akomodasi, dst).
-- **CostItem** — item biaya per project. `CostItemService` menghitung
-  subtotal/pajak/total otomatis dari quantity × unit_price + TaxType.rate,
-  dengan dua mode: **exclusive** (pajak ditambahkan di atas harga) dan
-  **inclusive** (pajak diekstrak dari harga yang sudah termasuk pajak) —
-  dipilih lewat checkbox `is_tax_inclusive`. Hasil hitung DISIMPAN
-  (snapshot), bukan dihitung ulang saat tampil. Dikelola inline di tab
-  "Biaya" pada halaman detail Project (pola sama dengan Contract/
-  PersonnelAssignment — tidak ada policy terpisah, gerbang lewat
-  `ProjectPolicy::update`).
-- **Payment (Termin)** — siklus status 5 tahap (`PaymentStatus`: Pending
-  → Submitted → Approved/Rejected → Paid) dengan transisi tervalidasi,
-  pola sama seperti `ProjectStatus` (D-010). **Validasi RULE 57 master
-  prompt**: total pembayaran (termasuk termin yang sedang diedit) tidak
-  boleh melebihi `contract_value`, kecuali user mencentang "izinkan
-  melebihi nilai kontrak" — diuji eksplisit lewat Pest DAN diverifikasi
-  manual di browser (pesan error jelas menyebut nilai kontrak dalam
-  Rupiah). Constraint unik (`project_id`,`termin_number`).
-- **Contract.tax_type_id** (additive) — memilih jenis pajak di form
-  Kontrak otomatis mengisi `tax_amount`/`net_value` sebagai DEFAULT
-  (asumsi nilai kontrak tax-inclusive), tapi kedua kolom tetap bisa
-  diedit manual — tidak dipaksakan mengikuti hasil hitung.
-- Seed data: `TaxTypeSeeder`, `CostCategorySeeder`, dan
-  `ReferenceProjectSeeder` diperluas dengan 2 item biaya contoh
-  (Perjalanan Survey, Pencetakan Laporan) + 1 termin (Termin 1 — Uang
-  Muka 20% = Rp396.122.184, sesuai pagu KAK RSPNDD).
-- 53 test Pest (38 Phase 1-3 + 15 Phase 4 baru): TaxType/CostCategory CRUD
-  + delete-guard, CostItem kalkulasi (no-tax, exclusive, inclusive,
-  recompute saat update), Payment create/update dalam & melebihi limit
-  kontrak (dengan & tanpa override), status transition valid/invalid,
-  unique termin_number. Semua hijau (`composer ci`).
+- **DocumentRequirement** — master data GLOBAL, opsional terikat ke satu
+  Project Type (`project_type_id` nullable — null berarti berlaku untuk
+  SEMUA jenis project). CRUD Livewire dengan rule bersarang (pola sama
+  seperti Client+Contact), hanya super_admin
+  (`document_requirements.manage`) yang mengelola.
+- **RequirementRule** — kondisi tambahan pada satu requirement. Field &
+  operator berasal dari VOCABULARY TERTUTUP (enum PHP), BUKAN expression
+  bebas — lihat `PROJECT_DECISIONS.md` D-015 untuk alasan lengkap.
+  Field yang tersedia sekarang: `has_personnel_assignments`,
+  `has_payments`, `has_travel_cost`, `personnel_category_codes`,
+  `payment_count`, `project_type_code`. Semua rule aktif pada satu
+  requirement digabung dengan AND; requirement tanpa rule selalu
+  berlaku.
+- **RequirementRuleEvaluator** — service kecil & stateless yang
+  mengevaluasi rule terhadap sebuah Project. **Kalau butuh field baru di
+  masa depan:** tambah 1 case di `RequirementRuleField` + 1 cabang
+  `match` di `resolveFieldValue()` — jangan pernah menambah reflection/
+  dot-path bebas ke model, itu akan melanggar keputusan D-015.
+- **ProjectChecklistItem** — status kelengkapan checklist per project,
+  disinkronkan lazim oleh `ChecklistService::sync()` (menambah baris untuk
+  requirement yang applicable, TIDAK menghapus baris lama meski
+  requirement itu belakangan tidak lagi cocok — supaya status yang sudah
+  diisi tidak hilang). Status (`ChecklistStatus`: Missing/Fulfilled/
+  NotApplicable) masih ditoggle manual — **Phase 7/8 (Document
+  Generator/SPJ Package) yang nanti akan mengisi status ini otomatis**
+  begitu Document/Evidence benar-benar ada.
+- Tab baru "Checklist" di halaman detail Project (pola sama dengan
+  Kontrak/Personel/Biaya/Termin — gerbang akses lewat `ProjectPolicy`,
+  tanpa policy terpisah untuk ProjectChecklistItem).
+- Seed data: `DocumentRequirementSeeder` — 9 requirement universal wajib
+  (Kontrak, SPMK, Surat Pernyataan, Invoice, Kwitansi, Faktur Pajak,
+  Berita Acara, Laporan, Dokumentasi) + 3 requirement kondisional dengan
+  rule nyata (Daftar Personel & Timesheet jika ada penugasan personel;
+  Bukti Perjalanan jika ada biaya kategori TRAVEL). Diverifikasi manual
+  di browser: project reference RSPNDD (yang punya personel & biaya
+  perjalanan) menampilkan ke-12 requirement itu dengan benar, dan
+  menandai satu item "Lengkap" langsung memperbarui progress bar.
+- 13 test baru (66 total): unit test `RequirementRuleEvaluator` (7 test —
+  tiap field/operator, AND semantics, rule tidak aktif diabaikan),
+  feature test DocumentRequirement CRUD + delete-guard, feature test
+  ChecklistService (universal selalu muncul, kondisional muncul/tidak
+  sesuai data, toggle status). Semua hijau (`composer ci`).
 
 ## Known Issues / Deferred (sengaja, bukan bug)
 
-- **Percentage kosong → error Postgres** (bug nyata yang ditemukan &
-  diperbaiki saat implementasi, pola SAMA seperti bug tanggal kosong di
-  Phase 2): field numeric nullable yang dikosongkan user mengirim string
-  kosong `''`, bukan `null`, ke database. **Kalau menambah field numeric/
-  date nullable baru di Livewire component manapun, selalu normalisasi
-  `$data['field'] = $data['field'] !== '' ? $data['field'] : null;`
-  sebelum simpan — jangan berasumsi validasi `nullable` saja cukup.**
-- CostItem belum ter-link otomatis ke PersonnelAssignment meski kolom
-  `personnel_assignment_id` sudah ada di skema — link ini disiapkan untuk
-  laporan/rekonsiliasi biaya personel vs assignment di fase mendatang,
-  belum ada UI untuk mengisinya. Bukan bug, hanya belum dipakai.
-- Payment belum terhubung ke Document Requirement (checklist dokumen
-  yang harus lengkap sebelum termin bisa diajukan) — `required_items`
-  masih kolom teks bebas. Ini akan diwire dengan benar begitu Document
-  Requirement Engine (Phase 5) ada.
-- Total nilai project (dari CostItem) belum direkonsiliasi dengan
-  Contract.contract_value di UI manapun — keduanya independen untuk saat
-  ini. Kalau nanti dibutuhkan dashboard "budget vs actual", itu pekerjaan
-  Phase 9 (Dashboard/Reporting).
+- Checklist status (`Missing`/`Fulfilled`/`NotApplicable`) MASIH manual
+  — belum otomatis dari keberadaan Document/Evidence sungguhan (itu
+  belum ada sampai Phase 7-8). **Saat Phase 7/8 dibangun, wire
+  `ChecklistService::updateStatus()` dipanggil otomatis saat dokumen
+  digenerate/diunggah, jangan hanya andalkan toggle manual.**
+- `RequirementRuleField` vocabulary sengaja kecil (6 field). §18 master
+  prompt menyebut lebih banyak kondisi contoh (personnel_has_certificate,
+  payment_type=personnel, dst) yang BELUM diimplementasikan — tambahkan
+  hanya kalau ada kebutuhan nyata, ikuti pola yang sama (1 enum case + 1
+  match branch), jangan generalisasi jadi expression engine.
+- Requirement per Project Type vs universal: kalau dua requirement (satu
+  universal, satu spesifik project type) punya `code` yang sama secara
+  konseptual (mis. dua "Laporan" berbeda kontennya per jenis project),
+  itu HARUS jadi dua row terpisah dengan code berbeda (mis.
+  `LAPORAN_SURVEY` vs `LAPORAN_STANDAR`) — tidak ada mekanisme
+  "override" otomatis satu code yang sama di dua project type.
 
-## Database Changes (Phase 4)
+## Database Changes (Phase 5)
 
-- `tax_types`: ulid PK, code (unique), name, rate (decimal 5,2),
-  is_active, description, soft delete. Global.
-- `cost_categories`: ulid PK, code (unique), name, description,
-  is_active, soft delete. Global.
-- `cost_items`: ulid PK, project_id/cost_category_id (FK),
-  personnel_assignment_id (FK nullable, belum dipakai UI), tax_type_id
-  (FK nullable), description, quantity, unit, unit_price,
-  is_tax_inclusive, subtotal, tax_amount, total, notes, soft delete.
-- `payments`: ulid PK, project_id (FK — TIDAK ADA organization_id
-  sendiri, lihat D-014), termin_number, name, percentage, amount,
-  target_date, trigger, required_items, status, submission_date,
-  approval_date, payment_date, notes, soft delete. Unique (project_id,
-  termin_number).
-- `contracts`: tambah kolom `tax_type_id` (FK tax_types, nullable,
-  nullOnDelete) — migration terpisah, additive.
+- `document_requirements`: ulid PK, project_type_id (FK nullable), code
+  (unique), name, category, description, is_active, sort_order, soft
+  delete. Global.
+- `requirement_rules`: ulid PK, document_requirement_id (FK cascade),
+  field, operator, value (nullable string), is_active.
+- `project_checklist_items`: ulid PK, project_id/document_requirement_id
+  (FK cascade), status, notes. Unique (project_id,
+  document_requirement_id).
 
 ## Environment
 
-Tidak berubah dari Phase 1-3.
+Tidak berubah dari Phase 1-4.
 
 ## Next Task
 
-**Phase 5 — Document Requirement Engine**: ini adalah fase paling teknis
-dan penting menurut master prompt (§17-18) — Document Requirement Engine
-berbasis rule, BUKAN checklist statis. Entitas: `document_requirements`
-(per Project Type — jenis dokumen apa saja yang wajib), `requirement_rules`
-(kondisi: mis. "jika personnel.category = tenaga_ahli maka CV wajib").
+**Phase 6 — Document Template**: Upload template DOCX (validasi MIME
+`.docx` saja, simpan lewat `FileStorageService` yang sudah ada dari
+Phase 3 — reuse, jangan bikin service upload baru), scan placeholder
+`{{variable}}` di dalam file (butuh library baca isi DOCX — evaluasi
+`phpoffice/phpword` di sini, bukan ditunda lagi ke Phase 7, karena
+deteksi placeholder adalah bagian dari Phase 6 menurut roadmap §64
+master prompt), tampilkan "Detected Variables" ke admin dengan warning
+kalau variable tidak dikenal, versioning template (v1/v2/dst, project
+pakai versi tertentu, dokumen lama tetap pakai versi lama — §63 master
+prompt).
 
-Sebelum mulai coding, WAJIB desain dulu skema rule yang cukup sederhana
-(§18 master prompt eksplisit: "Jangan membuat expression engine yang
-terlalu kompleks pada MVP"). Rekomendasi pendekatan:
-1. `requirement_rules` sebagai baris data dengan kolom `condition_field`,
-   `condition_operator`, `condition_value` (bukan expression string bebas
-   yang di-eval) — mis. field=`personnel_category.code`,
-   operator=`equals`, value=`TENAGA_AHLI`.
-2. Evaluasi rule dilakukan oleh satu class kecil (`RequirementRuleEvaluator`)
-   yang menerima "subject" (Project/PersonnelAssignment/dll) dan mengecek
-   kondisi field=operator=value secara generik — bukan per-kasus hard-code.
-3. Jangan coba mendukung SEMUA kombinasi kondisi dari §18 sekaligus di
-   MVP — mulai dari 3-4 kondisi konkret yang disebutkan (project_type,
-   personnel_category, has_certificate, payment_type) dan perluas kalau
-   memang dibutuhkan.
-
-Ini keputusan arsitektur yang cukup besar — kalau ada keraguan soal
-desain rule engine, berhenti dan diskusikan opsi ke user dulu sebelum
-menulis migration (RULE 9/10 master prompt), jangan berasumsi sendiri.
+Sebelum mulai, putuskan:
+1. Struktur `template_variables` — apakah tetap tabel master data
+   terpisah (daftar variable yang "dikenal" sistem, mis.
+   `project.name`, `client.name`, `payment.amount`) untuk validasi
+   silang terhadap placeholder yang terdeteksi, atau cukup deteksi
+   on-the-fly tanpa master data? Rekomendasi: BUTUH tabel master
+   (§20 master prompt eksplisit minta sistem "mendukung" tipe variable
+   text/number/currency/date/boolean/array/table) — tanpa itu tidak ada
+   cara memvalidasi placeholder yang di-scan.
+2. Apakah template terikat ke Project Type (seperti DocumentRequirement)
+   atau ke DocumentRequirement langsung (satu requirement punya satu
+   template default)? Rekomendasi: terikat ke DocumentRequirement,
+   karena itu yang benar-benar dipakai saat generate dokumen di Phase 7.
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 53
-test, 127 assertion, 0 error phpstan, 0 pint diff.
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 66
+test, 147 assertion, 0 error phpstan, 0 pint diff.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-014). Baru di Phase 4: D-013
-(Tax Type configurable, Contract.tax_type_id sebagai default bukan
-sumber kebenaran dipaksakan, CostItem inclusive/exclusive tax), D-014
-(Payment tidak punya organization_id sendiri, scoping dari project).
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-015). Baru di Phase 5: D-015
+(Document Requirement Engine — vocabulary field/operator tertutup, AND
+semantics, checklist idempotent-append). Ini keputusan arsitektur
+terbesar sejak Phase 0 — didiskusikan dengan user sebelum implementasi
+sesuai RULE 9/10 CLAUDE.md.
 
 ## Security Notes
 
-Tidak berubah dari Phase 1-3.
+Tidak berubah dari Phase 1-4.

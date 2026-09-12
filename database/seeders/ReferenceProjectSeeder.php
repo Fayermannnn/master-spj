@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Domain\Client\Enums\ContactType;
+use App\Domain\DocumentRequirement\Services\ChecklistService;
 use App\Domain\Payment\Enums\PaymentStatus;
 use App\Domain\ProjectManagement\Enums\ProjectStatus;
 use App\Models\Client;
@@ -89,6 +90,8 @@ class ReferenceProjectSeeder extends Seeder
 
         $this->seedPersonnel($organization, $project);
         $this->seedCostAndPayment($project);
+
+        app(ChecklistService::class)->sync($project->fresh());
     }
 
     /**

@@ -192,7 +192,12 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
   validasi tidak melebihi nilai kontrak kecuali override eksplisit —
   §57 master prompt). 53 test hijau, `composer ci` lulus. Detail:
   `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-013/D-014.
-- **Phase 5 — Document Requirement: BERIKUTNYA.** Document Requirement
-  Engine berbasis rule (§17-18 master prompt) — ini fase paling teknis
-  berikutnya, mulai dengan desain skema rule sederhana dulu sebelum
-  coding.
+- **Phase 5 — Document Requirement: SELESAI.** Document Requirement
+  Engine berbasis rule field/operator/value tertutup (§17-18 master
+  prompt) — DocumentRequirement (master data per Project Type atau
+  universal), RequirementRule (kondisi AND), RequirementRuleEvaluator,
+  ProjectChecklistItem (status per project, idempotent). 66 test hijau,
+  `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`,
+  `PROJECT_DECISIONS.md` D-015.
+- **Phase 6 — Document Template: BERIKUTNYA.** Upload template DOCX,
+  deteksi placeholder/variable, versioning template.

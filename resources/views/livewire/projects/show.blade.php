@@ -84,6 +84,13 @@
             >
                 Termin
             </button>
+            <button
+                type="button"
+                wire:click="setTab('checklist')"
+                class="border-b-2 px-1 py-2 font-medium {{ $activeTab === 'checklist' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700' }}"
+            >
+                Checklist
+            </button>
         </nav>
     </div>
 
@@ -122,7 +129,9 @@
         <livewire:project-personnel.manager :project="$project" :key="'personnel-'.$project->id" />
     @elseif ($activeTab === 'cost')
         <livewire:project-cost.manager :project="$project" :key="'cost-'.$project->id" />
-    @else
+    @elseif ($activeTab === 'payments')
         <livewire:project-payments.manager :project="$project" :key="'payments-'.$project->id" />
+    @else
+        <livewire:project-checklist.manager :project="$project" :key="'checklist-'.$project->id" />
     @endif
 </div>

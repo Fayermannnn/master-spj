@@ -88,6 +88,12 @@
                                 </x-nav-link>
                             @endcan
 
+                            @can('create', \App\Models\DocumentRequirement::class)
+                                <x-nav-link :href="route('document-requirements.index')" :active="request()->routeIs('document-requirements.*')">
+                                    Kebutuhan Dokumen
+                                </x-nav-link>
+                            @endcan
+
                             <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                                 Pengguna
                             </x-nav-link>

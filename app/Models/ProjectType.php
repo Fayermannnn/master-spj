@@ -41,4 +41,12 @@ class ProjectType extends Model
     {
         return $this->hasMany(Project::class);
     }
+
+    /**
+     * @return HasMany<DocumentRequirement, $this>
+     */
+    public function documentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentRequirement::class);
+    }
 }

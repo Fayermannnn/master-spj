@@ -8,6 +8,7 @@ use App\Livewire\Auth\Login;
 use App\Livewire\Clients;
 use App\Livewire\CostCategories;
 use App\Livewire\Dashboard;
+use App\Livewire\DocumentRequirements;
 use App\Livewire\Organizations;
 use App\Livewire\Personnel;
 use App\Livewire\PersonnelCategories;
@@ -68,4 +69,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/cost-categories', CostCategories\Index::class)->name('cost-categories.index');
     Route::get('/cost-categories/create', CostCategories\Form::class)->name('cost-categories.create');
     Route::get('/cost-categories/{costCategory}/edit', CostCategories\Form::class)->name('cost-categories.edit');
+
+    Route::get('/document-requirements', DocumentRequirements\Index::class)->name('document-requirements.index');
+    Route::get('/document-requirements/create', DocumentRequirements\Form::class)->name('document-requirements.create');
+    Route::get('/document-requirements/{documentRequirement}/edit', DocumentRequirements\Form::class)->name('document-requirements.edit');
 });

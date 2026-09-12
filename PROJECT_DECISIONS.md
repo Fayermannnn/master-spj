@@ -305,3 +305,43 @@ sinkron (mis. kalau project dipindah organisasi — meski itu sendiri
 belum didukung — kolom organization_id di Payment bisa basi). Satu
 sumber kebenaran (project) lebih aman daripada dua kolom yang harus
 selalu dijaga konsisten.
+
+## D-015 — Document Requirement Engine: rule field/operator/value tertutup, bukan expression bebas
+
+**Konteks:** §17-18 master prompt eksplisit meminta Document Requirement
+Engine berbasis rule yang bisa ditambah/diedit admin, TAPI juga eksplisit
+melarang expression engine yang kompleks di MVP. Ini keputusan arsitektur
+paling besar sejak Phase 0 (RULE 9/10 CLAUDE.md) — didiskusikan dengan
+user sebelum implementasi (lihat ringkasan opsi di `PROJECT_HANDOVER.md`
+akhir Phase 4), dikonfirmasi lanjut.
+
+**Keputusan:**
+1. `RequirementRuleField` — enum PHP TERTUTUP berisi field yang boleh
+   dipakai rule (`has_personnel_assignments`, `has_payments`,
+   `has_travel_cost`, `personnel_category_codes`, `payment_count`,
+   `project_type_code`). BUKAN dot-path bebas ke model manapun lewat
+   reflection — menambah field baru berarti menambah satu enum case +
+   satu cabang `match` di `RequirementRuleEvaluator::resolveFieldValue()`,
+   bukan mengekspos seluruh graph model ke rule engine.
+2. `RequirementRuleOperator` — enum tertutup (equals, not_equals,
+   contains, is_true, is_false, greater_than, less_than) dengan
+   `validFor(valueType)` yang membatasi kombinasi field↔operator yang
+   masuk akal di level validasi form.
+3. Semua rule AKTIF pada satu `DocumentRequirement` digabung dengan AND
+   (`RequirementRuleEvaluator::passes()`); requirement tanpa rule aktif
+   dianggap SELALU berlaku (untuk project type yang cocok).
+4. `document_requirements.project_type_id` nullable = requirement
+   universal (berlaku semua jenis project) — filter dasar SEBELUM rule
+   dievaluasi, bukan bagian dari rule itu sendiri.
+5. `project_checklist_items` bersifat idempotent-append: `ChecklistService::sync()`
+   MENAMBAH baris untuk requirement yang baru applicable, TIDAK MENGHAPUS
+   baris yang sudah ada meski requirement itu belakangan tidak lagi
+   cocok (supaya status yang sudah diisi user tidak hilang diam-diam
+   kalau rule/data project berubah).
+
+**Alasan:** Vocabulary tertutup + evaluator kecil memenuhi maksud §18
+("rule engine sederhana yang dapat dikembangkan") tanpa risiko keamanan/
+kompleksitas dari expression parser bebas (mis. tidak ada cara bagi rule
+untuk memanggil method sembarang atau membaca kolom sensitif). Menambah
+kondisi baru di masa depan = menambah 1 enum case + 1 baris match, bukan
+mengubah arsitektur.

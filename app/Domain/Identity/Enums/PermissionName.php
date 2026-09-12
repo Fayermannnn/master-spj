@@ -49,4 +49,6 @@ enum PermissionName: string
 
     case TaxTypesManage = 'tax_types.manage';
     case CostCategoriesManage = 'cost_categories.manage';
+
+    case DocumentRequirementsManage = 'document_requirements.manage';
 }
