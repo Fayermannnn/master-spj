@@ -31,6 +31,10 @@ class Manager extends Component
 
     public string $newPackageNotes = '';
 
+    public string $rejectNotes = '';
+
+    public bool $showRejectForm = false;
+
     public function mount(Project $project): void
     {
         $this->authorize('view', $project);
@@ -64,11 +68,13 @@ class Manager extends Component
     public function selectPackage(string $packageId): void
     {
         $this->selectedPackageId = $packageId;
+        $this->cancelRejectForm();
     }
 
     public function backToList(): void
     {
         $this->selectedPackageId = null;
+        $this->cancelRejectForm();
     }
 
     public function addDocument(string $documentId, SpjPackageService $service): void
@@ -113,17 +119,67 @@ class Manager extends Component
         }
     }
 
-    public function finalize(SpjPackageService $service): void
+    public function submit(SpjPackageService $service): void
     {
         $this->authorize('update', $this->project);
 
         $package = $this->findPackage();
 
+        /** @var User $user */
+        $user = Auth::user();
+
         try {
-            $service->finalize($package);
-            session()->flash('status', "Paket \"{$package->name}\" berhasil difinalisasi.");
+            $service->submit($package, $user);
+            session()->flash('status', "Paket \"{$package->name}\" berhasil diajukan untuk review.");
         } catch (DomainActionException $exception) {
             $this->addError('manifest', $exception->getMessage());
+        }
+    }
+
+    public function approve(SpjPackageService $service): void
+    {
+        $package = $this->findPackage();
+
+        $this->authorize('review', $package);
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        $service->approve($package, $user, null);
+        session()->flash('status', "Paket \"{$package->name}\" disetujui dan berstatus Final.");
+    }
+
+    public function openRejectForm(): void
+    {
+        $this->showRejectForm = true;
+        $this->reset(['rejectNotes']);
+        $this->resetErrorBag();
+    }
+
+    public function cancelRejectForm(): void
+    {
+        $this->showRejectForm = false;
+        $this->reset(['rejectNotes']);
+        $this->resetErrorBag();
+    }
+
+    public function reject(SpjPackageService $service): void
+    {
+        $package = $this->findPackage();
+
+        $this->authorize('review', $package);
+
+        $this->validate(['rejectNotes' => ['required', 'string', 'max:2000']]);
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        try {
+            $service->reject($package, $user, $this->rejectNotes);
+            $this->cancelRejectForm();
+            session()->flash('status', "Paket \"{$package->name}\" ditolak dan dikembalikan ke Draft.");
+        } catch (DomainActionException $exception) {
+            $this->addError('rejectNotes', $exception->getMessage());
         }
     }
 

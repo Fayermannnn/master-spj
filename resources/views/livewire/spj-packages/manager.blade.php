@@ -48,7 +48,7 @@
                                 {{ $package->payment ? 'Termin '.$package->payment->termin_number : 'Level Project' }}
                             </td>
                             <td class="px-4 py-3">
-                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $package->status->value === 'finalized' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ match($package->status->value) { 'finalized' => 'bg-emerald-50 text-emerald-700', 'submitted' => 'bg-amber-50 text-amber-700', default => 'bg-slate-100 text-slate-600' } }}">
                                     {{ $package->status->label() }}
                                 </span>
                             </td>
@@ -83,7 +83,7 @@
                     </p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $selectedPackage->status->value === 'finalized' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
+                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ match($selectedPackage->status->value) { 'finalized' => 'bg-emerald-50 text-emerald-700', 'submitted' => 'bg-amber-50 text-amber-700', default => 'bg-slate-100 text-slate-600' } }}">
                         {{ $selectedPackage->status->label() }}
                     </span>
                     <a href="{{ route('spj-packages.export', $selectedPackage) }}" class="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
@@ -91,13 +91,52 @@
                     </a>
                     @can('update', $project)
                         @if ($selectedPackage->status->value === 'draft')
-                            <button type="button" wire:click="finalize" wire:confirm="Finalisasi paket ini? Manifest tidak bisa diubah lagi setelah final." class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                                Finalisasi
+                            <button type="button" wire:click="submit" wire:confirm="Ajukan paket ini untuk direview? Manifest tidak bisa diubah lagi selama menunggu review." class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                                Ajukan untuk Review
                             </button>
+                        @endif
+                    @endcan
+                    @can('review', $selectedPackage)
+                        @if ($selectedPackage->status->value === 'submitted')
+                            <button type="button" wire:click="approve" wire:confirm="Setujui paket ini? Status akan menjadi Final dan tidak bisa diubah lagi." class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                                Setujui
+                            </button>
+                            @if (! $showRejectForm)
+                                <button type="button" wire:click="openRejectForm" class="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                                    Tolak
+                                </button>
+                            @endif
                         @endif
                     @endcan
                 </div>
             </div>
+
+            @if ($selectedPackage->status->value === 'submitted')
+                @can('review', $selectedPackage)
+                    @if ($showRejectForm)
+                        <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+                            <label class="mb-1 block text-xs font-medium text-red-700">Alasan Penolakan (wajib diisi)</label>
+                            <textarea wire:model="rejectNotes" rows="2" class="block w-full rounded-md border border-red-300 px-2 py-1.5 text-sm" placeholder="mis. Kwitansi Termin 2 belum sesuai format, mohon dilengkapi ulang."></textarea>
+                            @error('rejectNotes') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            <div class="mt-2 flex gap-2">
+                                <button type="button" wire:click="reject" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">
+                                    Kirim Penolakan
+                                </button>
+                                <button type="button" wire:click="cancelRejectForm" class="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                                    Batal
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+                @else
+                    <p class="mt-4 text-xs text-slate-400">Menunggu direview oleh admin perusahaan.</p>
+                @endcan
+            @elseif ($selectedPackage->status->value === 'draft' && $selectedPackage->review_notes)
+                <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    <p class="font-medium">Ditolak{{ $selectedPackage->reviewedBy ? ' oleh '.$selectedPackage->reviewedBy->name : '' }}:</p>
+                    <p class="mt-1">{{ $selectedPackage->review_notes }}</p>
+                </div>
+            @endif
 
             @if ($coverage !== null)
                 <div class="mt-4 border-t border-slate-100 pt-4">

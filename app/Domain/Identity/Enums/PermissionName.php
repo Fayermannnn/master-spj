@@ -54,4 +54,6 @@ enum PermissionName: string
     case TemplateVariablesManage = 'template_variables.manage';
 
     case AuditLogsViewAny = 'audit_logs.viewAny';
+
+    case SpjPackagesReview = 'spj_packages.review';
 }

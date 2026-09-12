@@ -107,17 +107,75 @@ class SpjPackageService
         $this->auditLog->record('Spj', 'item_removed', $package, before: $before);
     }
 
-    public function finalize(SpjPackage $package): SpjPackage
+    /**
+     * Mengajukan paket untuk direview — mengunci manifest (guard yang
+     * sama dengan Finalized, lihat `assertDraft()`) TAPI belum final,
+     * masih bisa ditolak kembali ke Draft lewat `reject()`.
+     */
+    public function submit(SpjPackage $package, ?User $submitter): SpjPackage
     {
         $this->assertDraft($package);
 
         if ($package->items()->count() === 0) {
-            throw new DomainActionException('Paket tidak boleh kosong saat difinalisasi.');
+            throw new DomainActionException('Paket tidak boleh kosong saat diajukan untuk review.');
         }
 
-        $package->update(['status' => SpjPackageStatus::Finalized->value, 'finalized_at' => now()]);
+        $package->update([
+            'status' => SpjPackageStatus::Submitted->value,
+            'submitted_at' => now(),
+            'submitted_by' => $submitter?->id,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_notes' => null,
+        ]);
 
-        $this->auditLog->record('Spj', 'package_finalized', $package);
+        $this->auditLog->record('Spj', 'package_submitted', $package, after: ['submitted_by' => $submitter?->id]);
+
+        return $package;
+    }
+
+    public function approve(SpjPackage $package, ?User $reviewer, ?string $notes): SpjPackage
+    {
+        $this->assertSubmitted($package);
+
+        $package->update([
+            'status' => SpjPackageStatus::Finalized->value,
+            'finalized_at' => now(),
+            'reviewed_at' => now(),
+            'reviewed_by' => $reviewer?->id,
+            'review_notes' => $notes,
+        ]);
+
+        $this->auditLog->record('Spj', 'package_approved', $package, after: ['reviewed_by' => $reviewer?->id, 'notes' => $notes]);
+
+        return $package;
+    }
+
+    /**
+     * Menolak paket kembali ke Draft — manifest bisa diedit lagi,
+     * siklus submit/review dimulai ulang dari nol (lihat `submit()`
+     * yang membersihkan `reviewed_at`/`reviewed_by`/`review_notes`
+     * saat diajukan ulang). Alasan WAJIB diisi — supaya penyusun tahu
+     * apa yang perlu diperbaiki, bukan cuma ditolak tanpa keterangan.
+     */
+    public function reject(SpjPackage $package, ?User $reviewer, string $notes): SpjPackage
+    {
+        $this->assertSubmitted($package);
+
+        if (trim($notes) === '') {
+            throw new DomainActionException('Alasan penolakan wajib diisi.');
+        }
+
+        $package->update([
+            'status' => SpjPackageStatus::Draft->value,
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => now(),
+            'reviewed_by' => $reviewer?->id,
+            'review_notes' => $notes,
+        ]);
+
+        $this->auditLog->record('Spj', 'package_rejected', $package, after: ['reviewed_by' => $reviewer?->id, 'notes' => $notes]);
 
         return $package;
     }
@@ -169,7 +227,14 @@ class SpjPackageService
     private function assertDraft(SpjPackage $package): void
     {
         if ($package->status !== SpjPackageStatus::Draft) {
-            throw new DomainActionException('Paket yang sudah berstatus Final tidak dapat diubah lagi. Buat paket baru untuk revisi.');
+            throw new DomainActionException('Paket yang sudah diajukan/final tidak dapat diubah lagi. Tolak paket ini kembali ke Draft, atau buat paket baru untuk revisi.');
+        }
+    }
+
+    private function assertSubmitted(SpjPackage $package): void
+    {
+        if ($package->status !== SpjPackageStatus::Submitted) {
+            throw new DomainActionException('Hanya paket berstatus "Menunggu Review" yang dapat disetujui/ditolak.');
         }
     }
 

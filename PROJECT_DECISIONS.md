@@ -1264,3 +1264,72 @@ placeholder `deliverable.name` lewat upload browser tidak sepadan
 dengan risikonya untuk pola UI yang sudah terbukti.
 
 **Hasil:** 171 test (3 baru), `composer ci` bersih.
+
+## D-028 — Alur Review/Approval Paket SPJ (mengisi domain Workflow)
+
+**Konteks:** Fitur keempat dari 5 fitur baru — mengisi `app/Domain/Workflow`
+yang sejak Phase 0 cuma README, padahal Workflow eksplisit ada di alur
+inti blueprint (§6: `Project Type → ... → Workflow → Templates...`).
+Gap nyata: `SpjPackageService::finalize()` sebelumnya langsung final
+sekali klik oleh SIAPAPUN yang bisa mengelola paket — tidak ada jenjang
+review, padahal SPJ (pertanggungjawaban) secara alami butuh diperiksa
+pihak lain sebelum dianggap final. INI BERBEDA dari 3 enum yang
+diputuskan TIDAK diberi aturan transisi baru di D-024 — di sana tidak
+ada requirement bisnis konkret; di sini ada (jenjang approval), dan
+`SpjPackageStatus` memang SUDAH punya validasi transisi nyata sejak
+awal (D-019), jadi menambah satu status baru adalah perluasan alami,
+bukan mengarang FSM dari nol.
+
+**Keputusan:**
+
+1. **`SpjPackageStatus` bertambah jadi 3 nilai**: `Draft` ->
+   `Submitted` -> `Finalized`, dengan `Submitted` -> `Draft` (ditolak).
+   Diberi `allowedTransitions()`/`canTransitionTo()` eksplisit — pola
+   SAMA PERSIS dengan `PaymentStatus` (D-010), bukan pola ad-hoc baru.
+   `assertDraft()` (guard manifest) TIDAK BERUBAH LOGIKANYA — otomatis
+   ikut mengunci manifest saat `Submitted` juga (menolak apapun selain
+   `Draft`), pas dengan maksud "tidak boleh diam-diam berubah selama
+   menunggu review".
+2. **Permission BARU `spj_packages.review`, TERPISAH dari
+   `projects.update`** — hanya diberikan ke `admin_perusahaan`/
+   `super_admin`, SENGAJA TIDAK diberikan ke `project_admin` (yang
+   justru paling sering mengelola/submit paket sehari-hari). Ini INTI
+   dari fitur: tanpa permission terpisah, "review" cuma tombol
+   tambahan untuk role yang sama — tidak ada pemisahan peran nyata.
+   `SpjPackagePolicy` (baru, HANYA method `review()`) menggerbanginya —
+   create/add/remove/submit TETAP lewat `ProjectPolicy::update` seperti
+   sebelumnya (D-019), tidak digantikan.
+3. **`submit()`/`approve()`/`reject()` menggantikan `finalize()`** (bukan
+   ditambah di sampingnya — `finalize()` DIHAPUS, bukan alias) di
+   `SpjPackageService`. `reject()` WAJIB diisi alasan (`trim($notes) === ''`
+   ditolak DI SERVICE, bukan cuma validasi UI) — supaya penyusun tahu
+   apa yang perlu diperbaiki. `submit()` membersihkan
+   `reviewed_at`/`reviewed_by`/`review_notes` lama — feedback penolakan
+   sebelumnya jadi riwayat (tetap terlacak lengkap di `audit_logs`),
+   bukan ditampilkan basi setelah pengajuan ulang.
+4. **TIDAK ada tabel riwayat baru** (beda dari `ContractAddendum`,
+   D-026) — kolom `submitted_at/by`, `reviewed_at/by`, `review_notes`
+   di `spj_packages` HANYA mencerminkan status siklus TERKINI, karena
+   setiap aksi service SUDAH otomatis tercatat lengkap di `audit_logs`
+   (viewer-nya sudah ada sejak D-023) — tidak perlu UI riwayat kedua
+   yang duplikatif. `ContractAddendum` beda karena butuh SNAPSHOT nilai
+   untuk ditampilkan sebagai daftar; di sini cukup status terkini +
+   Audit Log yang sudah ada.
+5. **Tidak ada pemaksaan "reviewer harus BUKAN pengaju yang sama"** —
+   di organisasi kecil yang cuma punya satu admin_perusahaan, orang itu
+   wajar mengelola DAN mereview sendiri. Sistem tidak melarangnya
+   (RULE 67, jangan menambah aturan yang tidak diminta) — pemisahan
+   peran ditegakkan lewat PERMISSION (siapa YANG BISA), bukan lewat
+   pemeriksaan "bukan orang yang sama" yang rapuh dan tidak diminta.
+
+**Verifikasi:** 9 test baru mencakup siklus penuh (submit, approve,
+reject dengan alasan wajib, tolak submit/approve pada status yang
+salah, segregasi permission project_admin vs admin_perusahaan lewat
+Livewire). Diverifikasi SEBAGIAN di browser — tombol "Ajukan untuk
+Review" dan badge status baru ter-render benar tanpa error, TAPI
+transisi status tidak bisa diklik lewat automasi karena `wire:confirm`
+(dialog konfirmasi native browser, dipakai konsisten di seluruh app
+ini) memblokir klik otomatis — bukan bug, keterbatasan tooling
+verifikasi, bukan kode.
+
+**Hasil:** 180 test (9 baru), `composer ci` bersih.

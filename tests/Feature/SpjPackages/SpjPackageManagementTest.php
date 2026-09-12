@@ -7,6 +7,7 @@ use App\Domain\DocumentGenerator\Services\DocumentGeneratorService;
 use App\Domain\DocumentTemplate\Enums\TemplateStatus;
 use App\Domain\Identity\Enums\RoleName;
 use App\Domain\Shared\Exceptions\DomainActionException;
+use App\Domain\Spj\Enums\SpjPackageStatus;
 use App\Domain\Spj\Services\SpjExportService;
 use App\Domain\Spj\Services\SpjPackageService;
 use App\Livewire\SpjPackages\Manager;
@@ -166,7 +167,8 @@ it('blocks manifest changes once a package is finalized', function (): void {
     $service = app(SpjPackageService::class);
     $package = $service->create($project, 'SPJ Akhir', null, null, $user);
     $service->addDocument($package, $document);
-    $service->finalize($package);
+    $service->submit($package, $user);
+    $service->approve($package->fresh(), $user, null);
 
     $otherRequirement = DocumentRequirement::factory()->create();
     $evidence = Evidence::factory()->create(['project_id' => $project->id, 'document_requirement_id' => $otherRequirement->id]);
@@ -174,22 +176,92 @@ it('blocks manifest changes once a package is finalized', function (): void {
     $service->addEvidence($package->fresh(), $evidence);
 })->throws(DomainActionException::class);
 
-it('rejects finalizing an empty package', function (): void {
+it('rejects submitting an empty package for review', function (): void {
     ['project' => $project, 'user' => $user] = buildSpjScenario();
     $service = app(SpjPackageService::class);
     $package = $service->create($project, 'SPJ Kosong', null, null, $user);
 
-    $service->finalize($package);
+    $service->submit($package, $user);
 })->throws(DomainActionException::class);
 
-it('rejects finalizing a package that is already finalized', function (): void {
+it('submits a package for review, locking the manifest but not finalizing it yet', function (): void {
     ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
     $service = app(SpjPackageService::class);
     $package = $service->create($project, 'SPJ Akhir', null, null, $user);
     $service->addDocument($package, $document);
-    $service->finalize($package);
 
-    $service->finalize($package->fresh());
+    $service->submit($package, $user);
+
+    expect($package->fresh()->status)->toBe(SpjPackageStatus::Submitted);
+    expect($package->fresh()->submitted_by)->toBe($user->id);
+});
+
+it('approves a submitted package, finalizing it', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    $service->approve($package->fresh(), $user, 'Sudah lengkap.');
+
+    $fresh = $package->fresh();
+    expect($fresh->status)->toBe(SpjPackageStatus::Finalized);
+    expect($fresh->reviewed_by)->toBe($user->id);
+    expect($fresh->review_notes)->toBe('Sudah lengkap.');
+    expect($fresh->finalized_at)->not->toBeNull();
+});
+
+it('rejects a submitted package back to draft with a reason, allowing the manifest to be edited again', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    $service->reject($package->fresh(), $user, 'Kwitansi belum sesuai format.');
+
+    $fresh = $package->fresh();
+    expect($fresh->status)->toBe(SpjPackageStatus::Draft);
+    expect($fresh->review_notes)->toBe('Kwitansi belum sesuai format.');
+    expect($fresh->submitted_by)->toBeNull();
+
+    // Manifest bisa diedit lagi setelah ditolak.
+    $otherRequirement = DocumentRequirement::factory()->create();
+    $evidence = Evidence::factory()->create(['project_id' => $project->id, 'document_requirement_id' => $otherRequirement->id]);
+    $service->addEvidence($fresh, $evidence);
+
+    expect($fresh->items()->count())->toBe(2);
+});
+
+it('requires a non-empty reason to reject a package', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    $service->reject($package->fresh(), $user, '   ');
+})->throws(DomainActionException::class);
+
+it('rejects approving a package that has not been submitted', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+
+    $service->approve($package, $user, null);
+})->throws(DomainActionException::class);
+
+it('rejects approving a package that is already finalized', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+    $service->approve($package->fresh(), $user, null);
+
+    $service->approve($package->fresh(), $user, null);
 })->throws(DomainActionException::class);
 
 it('rejects adding a document to an already-finalized package', function (): void {
@@ -197,7 +269,8 @@ it('rejects adding a document to an already-finalized package', function (): voi
     $service = app(SpjPackageService::class);
     $package = $service->create($project, 'SPJ Akhir', null, null, $user);
     $service->addDocument($package, $document);
-    $service->finalize($package);
+    $service->submit($package, $user);
+    $service->approve($package->fresh(), $user, null);
 
     $otherRequirement = DocumentRequirement::factory()->create();
     $templatePath = "document-templates/{$otherRequirement->id}/template.docx";
@@ -220,7 +293,8 @@ it('rejects removing an item from an already-finalized package', function (): vo
     $service = app(SpjPackageService::class);
     $package = $service->create($project, 'SPJ Akhir', null, null, $user);
     $item = $service->addDocument($package, $document);
-    $service->finalize($package);
+    $service->submit($package, $user);
+    $service->approve($package->fresh(), $user, null);
 
     $service->removeItem($item->fresh());
 })->throws(DomainActionException::class);
@@ -300,4 +374,80 @@ it('prevents a member from another organization from managing packages', functio
     Livewire::actingAs($outsider)
         ->test(Manager::class, ['project' => $project])
         ->assertForbidden();
+});
+
+it('lets a project_admin submit a package for review but not approve or reject it', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $adminPerusahaan] = buildSpjScenario();
+    $projectAdmin = User::factory()->create(['organization_id' => $project->organization_id]);
+    $projectAdmin->syncRoles([RoleName::ProjectAdmin->value]);
+
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $adminPerusahaan);
+    $service->addDocument($package, $document);
+
+    Livewire::actingAs($projectAdmin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('selectPackage', $package->id)
+        ->call('submit')
+        ->assertHasNoErrors();
+
+    expect($package->fresh()->status)->toBe(SpjPackageStatus::Submitted);
+
+    Livewire::actingAs($projectAdmin)
+        ->test(Manager::class, ['project' => $project])
+        ->call('selectPackage', $package->id)
+        ->call('approve')
+        ->assertForbidden();
+});
+
+it('lets an admin_perusahaan approve a submitted package through the Livewire manager', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('selectPackage', $package->id)
+        ->call('approve');
+
+    expect($package->fresh()->status)->toBe(SpjPackageStatus::Finalized);
+});
+
+it('lets an admin_perusahaan reject a submitted package with a reason through the Livewire manager', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('selectPackage', $package->id)
+        ->call('openRejectForm')
+        ->set('rejectNotes', 'Kwitansi belum lengkap.')
+        ->call('reject')
+        ->assertHasNoErrors();
+
+    $fresh = $package->fresh();
+    expect($fresh->status)->toBe(SpjPackageStatus::Draft);
+    expect($fresh->review_notes)->toBe('Kwitansi belum lengkap.');
+});
+
+it('rejects a rejection with an empty reason through the Livewire manager', function (): void {
+    ['project' => $project, 'document' => $document, 'user' => $user] = buildSpjScenario();
+    $service = app(SpjPackageService::class);
+    $package = $service->create($project, 'SPJ Akhir', null, null, $user);
+    $service->addDocument($package, $document);
+    $service->submit($package, $user);
+
+    Livewire::actingAs($user)
+        ->test(Manager::class, ['project' => $project])
+        ->call('selectPackage', $package->id)
+        ->call('openRejectForm')
+        ->call('reject')
+        ->assertHasErrors(['rejectNotes']);
+
+    expect($package->fresh()->status)->toBe(SpjPackageStatus::Submitted);
 });
