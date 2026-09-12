@@ -174,4 +174,10 @@ sebelumnya stabil (test hijau, `composer ci` lulus).
 - **Phase 1 — Foundation: SELESAI.** Auth, layout, User Management, RBAC
   (`spatie/laravel-permission`), Organization CRUD, audit log append-only.
   13 test hijau, `composer ci` lulus. Detail: `PROJECT_HANDOVER.md`.
-- **Phase 2 — Project: BERIKUTNYA.** Lihat `PROJECT_HANDOVER.md` §Next Task.
+- **Phase 2 — Project: SELESAI.** ProjectType (master data global),
+  Client + Contact (PPK/PPTK/PA-KPA, per-organisasi), Project (status
+  siklus + transisi tervalidasi), Contract (1:1, detail legal/finansial).
+  26 test hijau, `composer ci` lulus. Detail & keputusan normalisasi:
+  `PROJECT_HANDOVER.md`, `PROJECT_DECISIONS.md` D-008 s/d D-010.
+- **Phase 3 — Personnel: BERIKUTNYA.** Tenaga ahli/pendukung, penugasan ke
+  project, dokumen personel.

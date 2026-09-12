@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             OrganizationSeeder::class,
             UserSeeder::class,
+            ProjectTypeSeeder::class,
+            ReferenceProjectSeeder::class,
         ]);
     }
 }

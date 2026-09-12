@@ -7,5 +7,7 @@ parameters:
 
     level: 8
 
+    parseModelCastsMethod: true
+
     excludePaths:
         - app/Providers/*Provider.php

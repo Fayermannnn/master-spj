@@ -45,15 +45,45 @@ class RolePermissionSeeder extends Seeder
             PermissionName::UsersCreate->value,
             PermissionName::UsersUpdate->value,
             PermissionName::UsersDelete->value,
+            PermissionName::ClientsViewAny->value,
+            PermissionName::ClientsView->value,
+            PermissionName::ClientsCreate->value,
+            PermissionName::ClientsUpdate->value,
+            PermissionName::ClientsDelete->value,
+            PermissionName::ProjectsViewAny->value,
+            PermissionName::ProjectsView->value,
+            PermissionName::ProjectsCreate->value,
+            PermissionName::ProjectsUpdate->value,
+            PermissionName::ProjectsDelete->value,
+            PermissionName::ProjectsTransitionStatus->value,
         ]);
 
         $projectAdmin = Role::query()->firstOrCreate(['name' => RoleName::ProjectAdmin->value, 'guard_name' => 'web']);
         $projectAdmin->syncPermissions([
             PermissionName::UsersViewAny->value,
             PermissionName::UsersView->value,
+            PermissionName::ClientsViewAny->value,
+            PermissionName::ClientsView->value,
+            PermissionName::ProjectsViewAny->value,
+            PermissionName::ProjectsView->value,
+            PermissionName::ProjectsUpdate->value,
+            PermissionName::ProjectsTransitionStatus->value,
         ]);
 
-        Role::query()->firstOrCreate(['name' => RoleName::Staff->value, 'guard_name' => 'web']);
-        Role::query()->firstOrCreate(['name' => RoleName::Viewer->value, 'guard_name' => 'web']);
+        $staff = Role::query()->firstOrCreate(['name' => RoleName::Staff->value, 'guard_name' => 'web']);
+        $staff->syncPermissions([
+            PermissionName::ClientsViewAny->value,
+            PermissionName::ClientsView->value,
+            PermissionName::ProjectsViewAny->value,
+            PermissionName::ProjectsView->value,
+        ]);
+
+        $viewer = Role::query()->firstOrCreate(['name' => RoleName::Viewer->value, 'guard_name' => 'web']);
+        $viewer->syncPermissions([
+            PermissionName::ClientsViewAny->value,
+            PermissionName::ClientsView->value,
+            PermissionName::ProjectsViewAny->value,
+            PermissionName::ProjectsView->value,
+        ]);
     }
 }

@@ -149,3 +149,59 @@ mendatang).
 **Alasan:** Menghindari over-engineering (RULE 67) sambil tetap memenuhi
 maksud DoD: sumber kebenaran validasi tunggal, testable, terpisah dari
 markup.
+
+## D-008 — Project vs Contract: normalisasi field sesuai §33, bukan §9 literal
+
+**Konteks:** §9 master prompt menyebutkan Contract Number/Date, SPMK
+Number/Date, Contract Value, dst sebagai bagian dari field "Project", tapi
+§33 (Database Design) memisahkan tabel `projects` dan `contracts`.
+
+**Keputusan:** `projects` menyimpan identitas/status/relasi/tanggal
+eksekusi (start_date, end_date, duration_days); `contracts` menyimpan
+detail legal/finansial (contract_number, contract_date, spmk_number,
+spmk_date, contract_value, tax_amount, net_value), relasi 1:1 ke project.
+"Provider" = `projects.organization_id` (organisasi/tenant itu SENDIRI
+yang menjadi penyedia jasa) — tidak ada tabel `providers` terpisah.
+"Unit Kerja" disimpan sebagai kolom string di `projects` (bukan tabel
+tersendiri) karena §33 tidak mencantumkan tabel unit kerja.
+
+**Alasan:** §9 kemungkinan menjelaskan field-field dari sudut pandang
+form/UI (satu halaman input mencakup semua), sementara §33 adalah
+normalisasi database yang eksplisit. Mengikuti §33 untuk skema fisik,
+sambil form Project UI Phase 2 tetap mengekspos semua field via halaman
+detail bertab (Overview/Kontrak) supaya sudut pandang §9 tetap terpenuhi
+di level UX.
+
+## D-009 — Project Type global, Client/Project organization-scoped
+
+**Konteks:** Perlu diputuskan mana master data yang dibagi lintas
+organisasi (tenant) dan mana yang terisolasi per organisasi.
+
+**Keputusan:** `project_types` bersifat GLOBAL — dikelola hanya oleh
+super_admin (`project_types.manage`), dapat dipakai/dipilih oleh semua
+organisasi. `clients`, `contacts`, `projects`, `contracts` bersifat
+PER-ORGANISASI (kolom `organization_id`, sama seperti `users`) — setiap
+organisasi punya data klien/project sendiri, tidak saling terlihat
+(kecuali super_admin).
+
+**Alasan:** Project Type adalah taksonomi generik (§10: "Administrator
+dapat membuat project type baru") yang masuk akal dipakai bersama lintas
+perusahaan konsultan. Client/Project adalah data bisnis nyata milik
+masing-masing perusahaan — membaginya lintas tenant akan jadi kebocoran
+data antar kompetitor bisnis yang memakai sistem yang sama.
+
+## D-010 — Status project: enum + validasi transisi di service (bukan FSM generik)
+
+**Konteks:** Disebutkan sebagai keputusan tertunda di akhir Phase 1
+(`PROJECT_HANDOVER.md`). User mengonfirmasi lanjut ke Phase 2 tanpa
+mengoreksi opsi yang diusulkan.
+
+**Keputusan:** `App\Domain\ProjectManagement\Enums\ProjectStatus`
+(7 status sesuai §9) + method `allowedTransitions()`/`canTransitionTo()`
+pada enum itu sendiri, divalidasi di `ProjectService::transitionStatus()`.
+Tidak ada state-machine class/library generik terpisah.
+
+**Alasan:** RULE 67 (jangan over-engineer) — 7 status dengan aturan
+transisi statis tidak butuh mesin FSM. Jika kompleksitas bertambah
+signifikan di fase mendatang (mis. transisi bersyarat per project type),
+baru dipertimbangkan ekstraksi ke kelas terpisah.

@@ -32,6 +32,22 @@
                         </x-nav-link>
                     </div>
 
+                    @can('projects.viewAny')
+                        <div>
+                            <p class="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Project</p>
+
+                            <x-nav-link :href="route('projects.index')" :active="request()->routeIs('projects.*')">
+                                Project
+                            </x-nav-link>
+
+                            @can('clients.viewAny')
+                                <x-nav-link :href="route('clients.index')" :active="request()->routeIs('clients.*')">
+                                    Klien
+                                </x-nav-link>
+                            @endcan
+                        </div>
+                    @endcan
+
                     @can('users.viewAny')
                         <div>
                             <p class="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Administrasi</p>
@@ -39,6 +55,12 @@
                             @can('organizations.viewAny')
                                 <x-nav-link :href="route('organizations.index')" :active="request()->routeIs('organizations.*')">
                                     Organisasi
+                                </x-nav-link>
+                            @endcan
+
+                            @can('create', \App\Models\ProjectType::class)
+                                <x-nav-link :href="route('project-types.index')" :active="request()->routeIs('project-types.*')">
+                                    Jenis Project
                                 </x-nav-link>
                             @endcan
 

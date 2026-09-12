@@ -21,4 +21,19 @@ enum PermissionName: string
     case UsersCreate = 'users.create';
     case UsersUpdate = 'users.update';
     case UsersDelete = 'users.delete';
+
+    case ProjectTypesManage = 'project_types.manage';
+
+    case ClientsViewAny = 'clients.viewAny';
+    case ClientsView = 'clients.view';
+    case ClientsCreate = 'clients.create';
+    case ClientsUpdate = 'clients.update';
+    case ClientsDelete = 'clients.delete';
+
+    case ProjectsViewAny = 'projects.viewAny';
+    case ProjectsView = 'projects.view';
+    case ProjectsCreate = 'projects.create';
+    case ProjectsUpdate = 'projects.update';
+    case ProjectsDelete = 'projects.delete';
+    case ProjectsTransitionStatus = 'projects.transitionStatus';
 }

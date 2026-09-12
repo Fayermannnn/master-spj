@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\LogoutController;
 use App\Livewire\Auth\Login;
+use App\Livewire\Clients;
 use App\Livewire\Dashboard;
 use App\Livewire\Organizations;
+use App\Livewire\Projects;
+use App\Livewire\ProjectTypes;
 use App\Livewire\Users;
 use Illuminate\Support\Facades\Route;
 
@@ -27,4 +30,17 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/users', Users\Index::class)->name('users.index');
     Route::get('/users/create', Users\Form::class)->name('users.create');
     Route::get('/users/{user}/edit', Users\Form::class)->name('users.edit');
+
+    Route::get('/project-types', ProjectTypes\Index::class)->name('project-types.index');
+    Route::get('/project-types/create', ProjectTypes\Form::class)->name('project-types.create');
+    Route::get('/project-types/{projectType}/edit', ProjectTypes\Form::class)->name('project-types.edit');
+
+    Route::get('/clients', Clients\Index::class)->name('clients.index');
+    Route::get('/clients/create', Clients\Form::class)->name('clients.create');
+    Route::get('/clients/{client}/edit', Clients\Form::class)->name('clients.edit');
+
+    Route::get('/projects', Projects\Index::class)->name('projects.index');
+    Route::get('/projects/create', Projects\Form::class)->name('projects.create');
+    Route::get('/projects/{project}', Projects\Show::class)->name('projects.show');
+    Route::get('/projects/{project}/edit', Projects\Form::class)->name('projects.edit');
 });
