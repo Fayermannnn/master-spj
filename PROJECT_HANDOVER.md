@@ -9,9 +9,11 @@ lanjut tanpa kehilangan konteks.
 roadmap: **Notification — SELESAI**, **Audit Log viewer & self-service
 Profile — SELESAI**, **Backlog QA Phase 10 — SELESAI** (D-024), **5
 fitur baru (Payment Allocation, Contract Addendum, Deliverable wiring,
-SPJ Review Workflow, Document Numbering) — SELESAI** (D-025 s/d D-029).
-Repo di-push ke GitHub (`https://github.com/Fayermannnn/master-spj`,
-Public — dikonfirmasi user).
+SPJ Review Workflow, Document Numbering) — SELESAI** (D-025 s/d D-029),
+**Batch Surat Administratif (Kop Surat, SPP, Invoice, Slip Gaji, SPPD,
+Absensi) — SELESAI** (D-030 s/d D-035). Repo di-push ke GitHub
+(`https://github.com/Fayermannnn/master-spj`, Public — dikonfirmasi
+user).
 
 ## Completed Features
 
@@ -149,6 +151,64 @@ benar tapi transisi status tidak bisa diklik via automasi karena
 `wire:confirm` (native browser dialog) memblokir klik scripted —
 keterbatasan tooling, bukan kode (9 test Pest mencakup penuh logikanya).
 
+### Batch Surat Administratif (D-030 s/d D-035)
+
+User meminta kop surat otomatis + beberapa jenis surat yang dipakai
+dari awal sampai akhir pekerjaan proyek (SPPD, SPP, Slip Gaji, Invoice,
+Absensi Tenaga Ahli). Ditelusuri dulu (subagent) sebelum eksekusi:
+sistem SUDAH punya engine generik Phase 5-7 (DocumentRequirement +
+DocumentTemplate + DocumentGenerator) yang memang dirancang untuk ini
+— jadi sebagian besar pekerjaannya adalah menambah VARIABLE baru
+(data), bukan kode khusus per jenis surat (RULE 1). Dua keputusan
+diklarifikasi ke user lebih dulu (AskUserQuestion): Absensi cukup
+LEMBAR CETAK (bukan pencatatan digital), dan semua 4 surat lain jadi
+prioritas sekaligus.
+
+1. **Kop Surat Otomatis (D-030)** — logo di-upload 1x per organisasi
+   (`organizations.logo_*`), placeholder RESERVED `organization.logo`
+   diisi lewat `TemplateProcessor::setImageValue()` (dikonfirmasi
+   kompatibel dengan macro `{{ }}` kustom app ini SEBELUM menulis kode).
+   Halaman self-service `/settings/letterhead`.
+2. **SPP — Surat Permintaan Pembayaran (D-031)** — TIDAK butuh entitas
+   baru, murni variable `payment.*` tambahan (`name`/`percentage`/
+   `trigger`/`amount_terbilang`). "Terbilang" (angka dieja) jadi
+   helper bersama dipakai SPP/Kwitansi/Invoice.
+3. **Kelengkapan Invoice (D-032)** — grup tabel `cost_items` baru
+   (rincian item biaya per baris), pola identik grup `personnel` yang
+   sudah ada.
+4. **Slip Gaji (D-033)** — variable `salary.*` dari SATU CostItem
+   personil terpilih. SENGAJA TIDAK menghitung "gaji bersih" (gaji
+   dikurangi potongan) — semantik `CostItem.total` di app ini berarti
+   SEBALIKNYA (biaya ditambah pajak ke klien), memaksakan arah
+   sebaliknya akan memberi angka salah.
+5. **SPPD — Surat Perjalanan Dinas (D-034)** — SATU-SATUNYA yang butuh
+   entitas baru dari nol: `TravelAssignment` (domain Personnel yang
+   sudah ada, bukan domain baru). Di-nested di tab "Personel" yang
+   sudah ada.
+6. **Absensi Tenaga Ahli (D-035)** — lembar cetak, dihitung on-the-fly
+   dari rentang tanggal (BUKAN tabel database) — satu-satunya grup
+   tabel yang bukan dari model Eloquent. Tidak ada kolom
+   `documents.attendance_*` (tidak ada entitas untuk direferensikan).
+
+Pola konsisten di seluruh batch: setiap "pilihan konteks" (Payment/
+Deliverable/CostItem/TravelAssignment/Personnel+bulan) ditambahkan
+sebagai parameter OPSIONAL baru di `VariableResolver::resolveScalar()`/
+`DocumentGeneratorService::generate()` — SELALU di akhir daftar
+parameter (backward compatible, tidak pernah mengubah urutan yang
+sudah ada).
+
+Total: 38 test baru (192 → 230), `composer ci` bersih di setiap
+commit. Diverifikasi sungguhan di browser: Fitur SPPD (tambah
+perjalanan dinas lewat tab Personel, tersimpan & tampil benar). Fitur
+Kop Surat dan Absensi TIDAK bisa diverifikasi visual penuh — keduanya
+butuh upload template DOCX nyata dengan placeholder khusus
+(`organization.logo`/`attendance.*`), dan `<input type="file">` tidak
+bisa diisi lewat automasi browser (keterbatasan keamanan browser,
+bukan bug) — logikanya sendiri tercakup penuh lewat test (10 test
+untuk kop surat termasuk memeriksa isi ZIP docx hasil generate
+sungguhan ada gambar di `word/media/`; 17 test untuk absensi termasuk
+jumlah baris benar untuk bulan 28 vs 31 hari).
+
 ## Repository
 
 `https://github.com/Fayermannnn/master-spj` (**Public**, dikonfirmasi
@@ -195,45 +255,83 @@ Dari 5 fitur baru sesi ini (D-025 s/d D-029):
   dokumen — kalau organisasi butuh format berbeda untuk SPJ vs surat
   lain, itu perluasan model data terpisah.
 
+Dari batch surat administratif (D-030 s/d D-035):
+- **Absensi Tenaga Ahli TETAP hanya lembar cetak** — tidak ada
+  pencatatan kehadiran digital, riwayat, atau rekap otomatis (disengaja,
+  dikonfirmasi eksplisit ke user). Kalau nanti dibutuhkan pencatatan
+  digital sungguhan, itu fitur baru yang jauh lebih besar (domain baru,
+  input harian, UI rekap) — bukan perluasan kecil dari yang ada.
+- **Slip Gaji TIDAK menghitung "gaji bersih"** (gaji dikurangi
+  potongan PPh21) — hanya menampilkan `salary.subtotal`/`tax_amount`/
+  `total` apa adanya dari `CostItem` (yang semantiknya "biaya ditambah
+  pajak ke klien", BUKAN "gaji dikurangi potongan"). Kalau organisasi
+  butuh perhitungan potongan PPh21 sungguhan, itu kebutuhan baru yang
+  perlu model data terpisah (bukan derivasi dari CostItem yang ada).
+- Semua template DOCX untuk jenis surat baru ini (SPPD/SPP/Slip Gaji/
+  Invoice/Absensi/kop surat) HARUS diunggah admin sendiri lewat menu
+  Template yang sudah ada — TIDAK ADA template contoh/starter yang
+  disertakan sesi ini, hanya `DocumentRequirement` + variable
+  pendukungnya. Placeholder yang tersedia untuk masing-masing: lihat
+  `TemplateVariableSeeder`.
+- Kop Surat dan Absensi belum diverifikasi visual di browser (lihat
+  "Batch Surat Administratif" di atas) — logika sudah teruji lewat
+  Pest, tapi belum pernah dilihat sungguhan hasil DOCX-nya dengan
+  template nyata buatan manusia.
+
 ## Environment
 
 Dependency baru: tidak ada. Migrasi baru sesi ini SUDAH dijalankan di
 DB dev (`master_spj`) — `php artisan migrate` tetap perlu dijalankan
-manual di lingkungan lain yang belum migrate. `RolePermissionSeeder`
-juga PERLU dijalankan ulang (`php artisan db:seed --class=RolePermissionSeeder`,
-idempotent — aman diulang) di lingkungan manapun yang datanya sudah ada
-dari SEBELUM D-028, supaya permission baru `spj_packages.review`
-ter-assign ke role admin_perusahaan/super_admin. Tailwind: **aturan
-Phase 10 tetap berlaku** — selalu `npm run build` setelah mengubah
-class Tailwind di Blade manapun sebelum verifikasi browser
-(`.claude/launch.json` tidak menjalankan Vite dev server yang watch).
+manual di lingkungan lain yang belum migrate. Seeder yang PERLU
+dijalankan ulang di lingkungan manapun yang datanya sudah ada dari
+SEBELUM sesi ini (semua idempotent — aman diulang kapan saja):
+- `php artisan db:seed --class=RolePermissionSeeder` — permission baru
+  `spj_packages.review` (D-028) ter-assign ke admin_perusahaan/super_admin.
+- `php artisan db:seed --class=DocumentRequirementSeeder` — baris baru
+  `SURAT_PERMINTAAN_PEMBAYARAN`/`SLIP_GAJI`/`SURAT_PERJALANAN_DINAS`/
+  `ABSENSI_TENAGA_AHLI` (D-031).
+- `php artisan db:seed --class=TemplateVariableSeeder` — semua
+  placeholder baru dari D-029 s/d D-035 (`document.number`,
+  `organization.logo`, `payment.*` tambahan, `cost_item.*`, `salary.*`,
+  `travel.*`, `attendance.*`).
+
+Tailwind: **aturan Phase 10 tetap berlaku** — selalu `npm run build`
+setelah mengubah class Tailwind di Blade manapun sebelum verifikasi
+browser (`.claude/launch.json` tidak menjalankan Vite dev server yang
+watch).
 
 ## Next Task
 
-Tidak ada fase terjadwal berikutnya. Backlog QA Phase 10 SELESAI (D-024),
-5 fitur baru SELESAI (D-025 s/d D-029). Kemungkinan arah:
-1. Fitur baru lain sesuai kebutuhan konkret yang muncul — lihat "Known
-   Issues" untuk batas cakupan yang SENGAJA belum dibangun di kelima
-   fitur baru (jangan diasumsikan sudah lengkap).
-2. Aturan transisi status baru untuk ChecklistStatus/TemplateStatus/
+Tidak ada fase terjadwal berikutnya. Backlog QA Phase 10 SELESAI
+(D-024), 5 fitur baru SELESAI (D-025 s/d D-029), batch surat
+administratif SELESAI (D-030 s/d D-035). Kemungkinan arah:
+1. **Buat template DOCX nyata** untuk jenis surat baru (SPPD/SPP/Slip
+   Gaji/Invoice/Absensi/kop surat) — sesi ini hanya menyiapkan data +
+   variable-nya, admin/user perlu upload template sungguhan lewat menu
+   Template yang sudah ada supaya fitur-fitur ini benar-benar terpakai.
+2. Fitur baru lain sesuai kebutuhan konkret yang muncul — lihat "Known
+   Issues" untuk batas cakupan yang SENGAJA belum dibangun (jangan
+   diasumsikan sudah lengkap).
+3. Aturan transisi status baru untuk ChecklistStatus/TemplateStatus/
    WorkplanStatus — HANYA kalau ada requirement bisnis konkret (lihat
    D-024), jangan diasumsikan sendiri.
-3. Verifikasi browser lanjutan untuk Fitur 4 (SPJ review) — transisi
-   status belum sempat diklik-verifikasi karena `wire:confirm`
-   memblokir automasi; kalau sesi mendatang punya cara menangani native
-   dialog di tooling verifikasi, ini bisa dituntaskan.
-4. Permintaan fitur baru dari user.
-5. Production/deployment readiness — keputusan arsitektur besar baru
+4. Verifikasi browser lanjutan untuk Fitur SPJ Review (D-028)/Kop
+   Surat (D-030)/Absensi (D-035) — masing-masing terhalang keterbatasan
+   tooling berbeda (`wire:confirm` untuk SPJ Review; `<input
+   type="file">` untuk dua yang lain) — kalau sesi mendatang punya cara
+   menanganinya, ini bisa dituntaskan.
+5. Permintaan fitur baru dari user.
+6. Production/deployment readiness — keputusan arsitektur besar baru
    kalau diminta (RULE 10).
 
 ## Test Status
 
-`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 192
+`composer ci` (pint --test + phpstan level 8 + pest): **PASSED** — 230
 test, `composer ci` lulus bersih.
 
 ## Important Decisions
 
-Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-029). Baru sesi ini:
+Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-035). Baru sesi ini:
 - **D-024**: backlog QA Phase 10 — hanya SpjPackageStatus punya aturan
   transisi nyata, 3 enum lain sengaja dibiarkan tanpa validasi; 2 bug
   file-hilang-dari-disk diperbaiki (`FileStorageService::download()`
@@ -253,10 +351,24 @@ Lihat `PROJECT_DECISIONS.md` (D-001 s/d D-029). Baru sesi ini:
 - **D-029**: `NumberingSetting` per organisasi, `document.number`
   placeholder RESERVED (tidak pernah input bebas), halaman self-service
   reuse `OrganizationPolicy::update`.
+- **D-030**: logo organisasi (kop surat), `organization.logo`
+  placeholder GAMBAR RESERVED via `setImageValue()` (dikonfirmasi
+  kompatibel dengan macro `{{ }}` kustom SEBELUM menulis kode).
+- **D-031**: variable `payment.*` tambahan + helper "terbilang"
+  (angka dieja Bahasa Indonesia) untuk SPP.
+- **D-032**: grup tabel `cost_items` untuk rincian item Invoice.
+- **D-033**: variable `salary.*` dari CostItem personil terpilih —
+  SENGAJA TIDAK menghitung "gaji bersih" (arah semantik `CostItem.total`
+  berlawanan dengan "gaji dikurangi potongan").
+- **D-034**: `TravelAssignment` (domain Personnel) untuk SPPD —
+  satu-satunya entitas benar-benar baru di batch ini.
+- **D-035**: grup tabel `attendance` untuk Absensi — dihitung dari
+  rentang tanggal, BUKAN dari tabel database (lembar cetak, bukan
+  pencatatan digital, dikonfirmasi ke user).
 
 ## Security Notes
 
-D-021/D-022/D-024 tetap berlaku. Tambahan dari 5 fitur baru:
+D-021/D-022/D-024 tetap berlaku. Tambahan dari fitur-fitur baru:
 - **D-026**: `Contract.contract_value` sekarang dijaga di SERVER (bukan
   cuma `disabled` HTML) — submit langsung ke form utama saat kontrak
   sudah ada akan diabaikan diam-diam (di-`unset()` sebelum masuk
@@ -274,3 +386,15 @@ D-021/D-022/D-024 tetap berlaku. Tambahan dari 5 fitur baru:
   (`lockForUpdate()`) — dua request generate dokumen bersamaan tidak
   bisa mendapat nomor urut yang sama (race condition ditutup di level
   DB lock, bukan cuma asumsi).
+- **D-030**: logo organisasi disajikan lewat route yang digerbangi
+  `OrganizationPolicy::view` (anggota organisasi manapun boleh
+  LIHAT), sementara upload/ganti/hapus digerbangi `OrganizationPolicy::update`
+  (hanya admin) — dua level akses berbeda untuk baca vs tulis pada
+  resource yang sama.
+- **D-034**: `TravelAssignment.personnel_id` pakai `restrictOnDelete()`
+  (pola sama `personnel_assignments`) — Personnel tidak bisa dihapus
+  kalau masih punya riwayat perjalanan dinas.
+- **D-035**: dropdown personil absensi & personnel CostItem (Slip
+  Gaji, D-033) SAMA-SAMA dibatasi ke personil yang benar-benar
+  ditugaskan/relevan ke project yang sedang dibuka — bukan seluruh
+  personil organisasi — diverifikasi test di kedua fitur.
